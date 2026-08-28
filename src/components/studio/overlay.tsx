@@ -108,7 +108,7 @@ export function Overlay() {
       if (e.key === "x" || e.key === "X") {
         const cur = useStudio.getState().abdomenXray;
         setParam("abdomenXray", cur > 0.05 ? 0 : 0.38);
-        if (cur <= 0.5) setParam("showOrgans", true);
+        if (cur <= 0.05) setParam("showOrgans", true);
       }
       if (e.key === "k" || e.key === "K") setParam("showLattice", !useStudio.getState().showLattice);
       if (e.key === "w" || e.key === "W") setParam("showWeights", !useStudio.getState().showWeights);
@@ -345,7 +345,7 @@ export function Overlay() {
                     setParam("showGutHp", next);
                     if (next) {
                       setParam("showOrgans", true);
-                      if (abdomenXray < 0.3) setParam("abdomenXray", 0.78);
+                      if (abdomenXray < 0.08) setParam("abdomenXray", 0.38);
                     }
                   }}
                   icon={<Heart className="size-3.5" />}
