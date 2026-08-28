@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { ExpressionId, PoseId } from "@/lib/softbody/soft-skeleton";
 
 export type PresetId = "soft" | "firm" | "jelly" | "athletic";
 export type InteractMode = "press" | "drag";
@@ -13,6 +14,7 @@ export type StudioParams = {
   breathing: boolean;
   slowMo: boolean;
   showLattice: boolean;
+  showWeights: boolean;
   autoRotate: boolean;
   abdomenXray: number;
   showOrgans: boolean;
@@ -35,6 +37,7 @@ export const PRESETS: Record<
     breathing: true,
     slowMo: false,
     showLattice: false,
+    showWeights: false,
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
@@ -52,6 +55,7 @@ export const PRESETS: Record<
     breathing: true,
     slowMo: false,
     showLattice: false,
+    showWeights: false,
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
@@ -69,6 +73,7 @@ export const PRESETS: Record<
     breathing: false,
     slowMo: false,
     showLattice: false,
+    showWeights: false,
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
@@ -86,6 +91,7 @@ export const PRESETS: Record<
     breathing: true,
     slowMo: false,
     showLattice: false,
+    showWeights: false,
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
@@ -96,6 +102,8 @@ export const PRESETS: Record<
 type StudioState = StudioParams & {
   preset: PresetId;
   interactMode: InteractMode;
+  expression: ExpressionId;
+  pose: PoseId;
   energy: number;
   grabbing: boolean;
   shakeNonce: number;
@@ -108,6 +116,8 @@ type StudioState = StudioParams & {
   setParam: <K extends keyof StudioParams>(key: K, value: StudioParams[K]) => void;
   applyPreset: (id: PresetId) => void;
   setInteractMode: (mode: InteractMode) => void;
+  setExpression: (id: ExpressionId) => void;
+  setPose: (id: PoseId) => void;
   setEnergy: (v: number) => void;
   setGrabbing: (v: boolean) => void;
   shake: () => void;
@@ -119,6 +129,8 @@ export const useStudio = create<StudioState>((set) => ({
   ...PRESETS.soft,
   preset: "soft",
   interactMode: "press",
+  expression: "rest",
+  pose: "idle",
   energy: 0,
   grabbing: false,
   shakeNonce: 0,
@@ -140,10 +152,16 @@ export const useStudio = create<StudioState>((set) => ({
       preset: id,
       abdomenXray: s.abdomenXray,
       showOrgans: s.showOrgans,
+      showLattice: s.showLattice,
+      showWeights: s.showWeights,
       uiHidden: s.uiHidden,
       interactMode: s.interactMode,
+      expression: s.expression,
+      pose: s.pose,
     })),
   setInteractMode: (interactMode) => set({ interactMode }),
+  setExpression: (expression) => set({ expression }),
+  setPose: (pose) => set({ pose }),
   setEnergy: (energy) => set({ energy }),
   setGrabbing: (grabbing) => set({ grabbing }),
   shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),

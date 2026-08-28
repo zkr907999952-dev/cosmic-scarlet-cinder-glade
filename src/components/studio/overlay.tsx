@@ -16,6 +16,7 @@ import {
 import * as Slider from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
 import { PRESETS, useStudio, type PresetId, type StudioParams } from "@/lib/studio-store";
+import { EXPRESSIONS, POSES } from "@/lib/softbody/soft-skeleton";
 
 const SLIDERS: {
   id: keyof Pick<
@@ -43,6 +44,11 @@ export function Overlay() {
   const breathing = useStudio((s) => s.breathing);
   const slowMo = useStudio((s) => s.slowMo);
   const showLattice = useStudio((s) => s.showLattice);
+  const showWeights = useStudio((s) => s.showWeights);
+  const expression = useStudio((s) => s.expression);
+  const pose = useStudio((s) => s.pose);
+  const setExpression = useStudio((s) => s.setExpression);
+  const setPose = useStudio((s) => s.setPose);
   const autoRotate = useStudio((s) => s.autoRotate);
   const showOrgans = useStudio((s) => s.showOrgans);
   const uiHidden = useStudio((s) => s.uiHidden);
@@ -80,10 +86,28 @@ export function Overlay() {
         setParam("abdomenXray", cur > 0.5 ? 0 : 0.82);
         if (cur <= 0.5) setParam("showOrgans", true);
       }
+      if (e.key === "k" || e.key === "K") setParam("showLattice", !useStudio.getState().showLattice);
+      if (e.key === "w" || e.key === "W") setParam("showWeights", !useStudio.getState().showWeights);
+      const exprKeys: Record<string, (typeof EXPRESSIONS)[number]["id"]> = {
+        "1": "rest",
+        "2": "smile",
+        "3": "surprise",
+        "4": "open",
+      };
+      if (exprKeys[e.key]) setExpression(exprKeys[e.key]);
+      const poseKeys: Record<string, (typeof POSES)[number]["id"]> = {
+        "5": "idle",
+        "6": "armsUp",
+        "7": "bow",
+        "8": "legLift",
+        "9": "twist",
+        "0": "sway",
+      };
+      if (poseKeys[e.key]) setPose(poseKeys[e.key]);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [resetSim, shake, setParam, setInteractMode]);
+  }, [resetSim, shake, setParam, setInteractMode, setExpression, setPose]);
 
   const energyNorm = Math.min(1, energy * 8);
   const hideUi = () => setParam("uiHidden", true);
@@ -161,7 +185,7 @@ export function Overlay() {
 
       <div className="pointer-events-none absolute top-20 left-4 hidden w-44 sm:block sm:left-6">
         <p className="text-xs leading-snug text-muted text-pretty">
-          左键空白处旋转视角。点到身体上：按压会往里推，拖拽可拉全身软组织。透视下肠子在腹腔、盆腔器官对外阴。
+          左键空白处旋转。点身体：按压内推，拖拽带动骨骼。菜单可切表情/动作，显示骨骼与绑定。K 骨骼 · W 绑定 · 1-4 表情 · 5-0 动作 · X 透视。
         </p>
         <div className="mt-4">
           <div className="mb-1 flex items-center justify-between text-xs tracking-wide text-muted uppercase">
@@ -236,7 +260,13 @@ export function Overlay() {
               active={showLattice}
               onClick={() => setParam("showLattice", !showLattice)}
               icon={<Grid3x3 className="size-3.5" />}
-              label="质点"
+              label="显示骨骼"
+            />
+            <Toggle
+              active={showWeights}
+              onClick={() => setParam("showWeights", !showWeights)}
+              icon={<Scan className="size-3.5" />}
+              label="显示绑定"
             />
             <Toggle
               active={autoRotate}
@@ -264,6 +294,44 @@ export function Overlay() {
               icon={<Scan className="size-3.5" />}
               label="透视"
             />
+          </div>
+
+          <p className="mt-4 mb-1.5 text-xs text-muted">表情</p>
+          <div className="grid grid-cols-4 gap-1">
+            {EXPRESSIONS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setExpression(item.id)}
+                className={cn(
+                  "h-9 rounded-md border text-[11px] font-medium",
+                  expression === item.id
+                    ? "border-accent bg-accent text-accent-fg"
+                    : "border-border bg-surface-2 text-muted hover:text-fg",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <p className="mt-3 mb-1.5 text-xs text-muted">动作</p>
+          <div className="grid grid-cols-3 gap-1 sm:grid-cols-3">
+            {POSES.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setPose(item.id)}
+                className={cn(
+                  "h-9 rounded-md border text-[11px] font-medium",
+                  pose === item.id
+                    ? "border-accent bg-accent text-accent-fg"
+                    : "border-border bg-surface-2 text-muted hover:text-fg",
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -321,7 +389,7 @@ export function Overlay() {
         <span>{interactMode === "drag" ? "拖拽" : "按压"}</span>
         <span className="text-border">/</span>
         <Activity className="size-3.5" />
-        <span>左键空白旋转 · 点身体操作 · 中键平移 · T 切换 · X 透视</span>
+        <span>左键旋转 · 点身体操作 · T 切换 · X 透视 · K 骨骼 · W 绑定</span>
       </div>
         </>
       )}

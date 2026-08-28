@@ -19,7 +19,7 @@ const _center = new THREE.Vector3();
 const _local = new THREE.Vector3();
 
 const TORSO_RE = /skin|dress|body|torso|outfit|cloth|top|bottom|nude|mesh/i;
-const SKIP_RE = /hair|eye|mouth|charm|wing|lash/i;
+const SKIP_BIND_RE = /charm|wing/i;
 
 type FigureProps = {
   controlsRef: RefObject<OrbitControlsImpl | null>;
@@ -36,21 +36,32 @@ function meshKey(mesh: THREE.Object3D) {
 
 function isTorsoMesh(mesh: THREE.Object3D) {
   const k = meshKey(mesh);
-  if (SKIP_RE.test(k)) return false;
-  if (/\.001/.test(k) && !/skin|dress|body/.test(k)) return false;
+  if (/hair|eye|mouth|charm|wing|lash|\.001/.test(k) && !/skin|dress|body/.test(k)) return false;
   const m = mesh as THREE.Mesh;
   const n = (m.geometry?.getAttribute("position") as THREE.BufferAttribute | undefined)?.count ?? 0;
   if (n > 35000) return false;
   return TORSO_RE.test(k);
 }
 
-function isBodyMesh(mesh: THREE.Object3D) {
+function bindHint(mesh: THREE.Object3D) {
   const k = meshKey(mesh);
-  if (SKIP_RE.test(k)) return false;
+  if (/hair|\.001/.test(k) && !/skin|dress|head|eye|mouth/.test(k)) return "hair";
+  if (/eye/.test(k)) return "eye";
+  if (/mouth/.test(k)) return "mouth";
+  if (/head/.test(k)) return "face";
+  if (/skin/.test(k)) return "legs";
+  if (/dress/.test(k)) return "dress";
+  if (/gut|intestin/.test(k)) return "organs";
+  if (/pelvis|uterus|ovary/.test(k)) return "organs";
+  return "body";
+}
+
+function shouldBind(mesh: THREE.Object3D) {
+  const k = meshKey(mesh);
+  if (SKIP_BIND_RE.test(k)) return false;
   const m = mesh as THREE.Mesh;
   const n = (m.geometry?.getAttribute("position") as THREE.BufferAttribute | undefined)?.count ?? 0;
-  if (n > 35000) return false;
-  return TORSO_RE.test(k) || /head|skin|dress/.test(k);
+  return n >= 12;
 }
 
 function findNavel(body: THREE.Object3D, height: number) {
@@ -228,7 +239,8 @@ function taperGutTop(group: THREE.Object3D) {
   const span = Math.max(1e-4, y1 - y0);
   const cx = (box.min.x + box.max.x) * 0.5;
   const cz = (box.min.z + box.max.z) * 0.5;
-  const cut = y0 + span * 0.55;
+  const cutHi = y0 + span * 0.4;
+  const cutLo = y0 + span * 0.48;
   group.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh || !mesh.geometry) return;
@@ -237,12 +249,18 @@ function taperGutTop(group: THREE.Object3D) {
     const arr = pos.array;
     for (let i = 0; i < pos.count; i++) {
       const y = arr[i * 3 + 1]!;
-      if (y < cut) continue;
-      const k = (y - cut) / Math.max(1e-4, y1 - cut);
-      const s = 1 - k * k * 0.2;
-      arr[i * 3] = cx + (arr[i * 3]! - cx) * s;
-      arr[i * 3 + 2] = cz + (arr[i * 3 + 2]! - cz) * s;
-      arr[i * 3 + 1] = cut + (y - cut) * (1 - k * 0.1);
+      if (y > cutHi) {
+        const k = (y - cutHi) / Math.max(1e-4, y1 - cutHi);
+        const s = 1 - k * k * 0.48;
+        arr[i * 3] = cx + (arr[i * 3]! - cx) * s;
+        arr[i * 3 + 2] = cz + (arr[i * 3 + 2]! - cz) * s;
+        arr[i * 3 + 1] = cutHi + (y - cutHi) * (1 - k * 0.28);
+      } else if (y < cutLo) {
+        const k = 1 - (y - y0) / Math.max(1e-4, cutLo - y0);
+        const s = 1 + k * k * 0.22;
+        arr[i * 3] = cx + (arr[i * 3]! - cx) * s;
+        arr[i * 3 + 2] = cz + (arr[i * 3 + 2]! - cz) * s;
+      }
     }
     pos.needsUpdate = true;
     mesh.geometry.computeBoundingBox();
@@ -394,6 +412,9 @@ function FittedFigure({
 }) {
   const pokeRef = useRef<THREE.Mesh>(null);
   const latticeRef = useRef<THREE.Points>(null);
+  const bonesRef = useRef<THREE.LineSegments>(null);
+  const exprRef = useRef(useStudio.getState().expression);
+  const poseRef = useRef(useStudio.getState().pose);
   const grab = useRef<{
     active: boolean;
     mode: "press" | "drag";
@@ -440,7 +461,7 @@ function FittedFigure({
 
     const gutBox = new THREE.Box3(
       new THREE.Vector3(abdomen.min.x, yNavel - 0.09, abdomen.min.z),
-      new THREE.Vector3(abdomen.max.x, yNavel + 0.13, abdomen.max.z),
+      new THREE.Vector3(abdomen.max.x, yNavel + 0.1, abdomen.max.z),
     );
     const gut = placeInFront(intestines, gutBox, 1.08, skinZ - 0.016);
     taperGutTop(gut);
@@ -461,8 +482,9 @@ function FittedFigure({
     const armSpan = Math.max(charBox.max.x, -charBox.min.x);
     const skeleton = new SoftSkeleton(navel, height, armSpan);
     const boundGeos: THREE.BufferGeometry[] = [];
+    const weightViews: { mesh: THREE.Mesh; orig: THREE.Material | THREE.Material[]; weight: THREE.Material }[] = [];
 
-    const bindMesh = (mesh: THREE.Mesh) => {
+    const bindMesh = (mesh: THREE.Mesh, hint?: string) => {
       let geo = mesh.geometry as THREE.BufferGeometry;
       const pos0 = geo.getAttribute("position") as THREE.BufferAttribute | undefined;
       if (!pos0 || pos0.itemSize !== 3) return;
@@ -482,14 +504,20 @@ function FittedFigure({
       }
       pos.array.set(world);
       pos.needsUpdate = true;
-      skeleton.bind(pos.array);
+      const binding = skeleton.bind(pos.array, hint ?? bindHint(mesh));
+      geo.setAttribute("color", new THREE.BufferAttribute(binding.colors, 3));
       boundGeos.push(geo);
+      const weightMat = new THREE.MeshLambertMaterial({
+        vertexColors: true,
+        side: THREE.DoubleSide,
+      });
+      weightViews.push({ mesh, orig: mesh.material, weight: weightMat });
     };
 
     body.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh || !mesh.geometry) return;
-      if (!isBodyMesh(mesh)) {
+      if (!shouldBind(mesh)) {
         mesh.raycast = () => {};
         return;
       }
@@ -499,12 +527,37 @@ function FittedFigure({
 
     gut.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
-      if (mesh.isMesh) bindMesh(mesh);
+      if (mesh.isMesh) bindMesh(mesh, "organs");
     });
     pelvic.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
-      if (mesh.isMesh) bindMesh(mesh);
+      if (mesh.isMesh) bindMesh(mesh, "organs");
     });
+    const jointBuf = new Float32Array(skeleton.count * 3);
+    const boneVis = new THREE.Group();
+    boneVis.visible = false;
+    const jointGeo = new THREE.SphereGeometry(0.014, 8, 8);
+    const jointMat = new THREE.MeshBasicMaterial({ color: "#d4b5a0", depthTest: false, transparent: true, opacity: 0.95 });
+    const joints: THREE.Mesh[] = [];
+    for (let i = 0; i < skeleton.count; i++) {
+      const m = new THREE.Mesh(jointGeo, jointMat);
+      m.frustumCulled = false;
+      m.renderOrder = 30;
+      boneVis.add(m);
+      joints.push(m);
+    }
+    const linePos = new Float32Array(skeleton.boneLineCount() * 6);
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute("position", new THREE.BufferAttribute(linePos, 3));
+    const boneLines = new THREE.LineSegments(
+      lineGeo,
+      new THREE.LineBasicMaterial({ color: "#f2efe9", depthTest: false, transparent: true, opacity: 0.85 }),
+    );
+    boneLines.frustumCulled = false;
+    boneLines.renderOrder = 29;
+    boneVis.add(boneLines);
+    root.add(boneVis);
+    for (const v of weightViews) v.orig = v.mesh.material;
 
     const gutBoxNow = new THREE.Box3().setFromObject(gut);
     const pelBoxNow = new THREE.Box3().setFromObject(pelvic);
@@ -532,6 +585,11 @@ function FittedFigure({
       pelvisRoot: pelvic,
       boundGeos,
       bellyLight,
+      weightViews,
+      boneVis,
+      joints,
+      boneLines,
+      jointBuf,
     };
   }, [character, intestines, pelvis]);
 
@@ -589,6 +647,14 @@ function FittedFigure({
     if (s.resetNonce !== lastReset.current) {
       lastReset.current = s.resetNonce;
       setup.skeleton.reset();
+    }
+    if (s.expression !== exprRef.current) {
+      exprRef.current = s.expression;
+      setup.skeleton.setExpression(s.expression);
+    }
+    if (s.pose !== poseRef.current) {
+      poseRef.current = s.pose;
+      setup.skeleton.setPose(s.pose);
     }
 
     if (grab.current?.active) {
@@ -650,19 +716,33 @@ function FittedFigure({
     setup.pelvisRoot.visible = show;
     setup.bellyLight.intensity = show ? 0.18 + xray * 0.22 : 0;
 
-    if (latticeRef.current) {
-      latticeRef.current.visible = s.showLattice;
-      if (s.showLattice) {
-        const lp = latticeRef.current.geometry.getAttribute("position") as THREE.BufferAttribute;
-        setup.skeleton.jointPositions(lp.array as Float32Array);
-        lp.needsUpdate = true;
+    setup.boneVis.visible = s.showLattice;
+    if (s.showLattice) {
+      const jp = setup.skeleton.jointPositions(setup.jointBuf);
+      for (let i = 0; i < setup.joints.length; i++) {
+        setup.joints[i]!.position.set(jp[i * 3]!, jp[i * 3 + 1]!, jp[i * 3 + 2]!);
       }
+      const lp = setup.boneLines.geometry.getAttribute("position") as THREE.BufferAttribute;
+      setup.skeleton.writeBoneLines(lp.array as Float32Array);
+      lp.needsUpdate = true;
+    }
+    for (const v of setup.weightViews) {
+      v.mesh.material = s.showWeights ? v.weight : v.orig;
     }
   });
 
   const latticeGeo = useMemo(() => {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(setup.skeleton.count * 3), 3));
+    return g;
+  }, [setup]);
+
+  const boneGeo = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute(
+      "position",
+      new THREE.BufferAttribute(new Float32Array(setup.skeleton.boneLineCount() * 2 * 3), 3),
+    );
     return g;
   }, [setup]);
 
@@ -724,9 +804,12 @@ function FittedFigure({
         <boxGeometry args={[Math.max(0.28, ab.max.x - ab.min.x + 0.12), Math.max(0.55, setup.y1 - setup.y0 + 0.35), 0.14]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
-      <points ref={latticeRef} geometry={latticeGeo} visible={false}>
-        <pointsMaterial color="#d4b5a0" size={0.012} sizeAttenuation />
+      <points ref={latticeRef} geometry={latticeGeo} visible={false} renderOrder={20}>
+        <pointsMaterial color="#f2efe9" size={0.018} sizeAttenuation depthTest={false} />
       </points>
+      <lineSegments ref={bonesRef} geometry={boneGeo} visible={false} renderOrder={19}>
+        <lineBasicMaterial color="#d4b5a0" depthTest={false} />
+      </lineSegments>
       <mesh ref={pokeRef} visible={false} renderOrder={10}>
         <ringGeometry args={[0.024, 0.036, 28]} />
         <meshBasicMaterial color="#d4b5a0" transparent opacity={0.8} side={THREE.DoubleSide} depthTest={false} />

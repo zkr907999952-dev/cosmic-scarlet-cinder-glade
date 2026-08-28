@@ -59,5 +59,22 @@ await shot(page, "/workspace/screenshots/poke.png");
 await page.evaluate(() => {
   window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0, pointerId: 1 }));
 });
+
+await page.keyboard.press("x");
+await page.waitForTimeout(400);
+await page.keyboard.press("k");
+await page.waitForTimeout(400);
+await shot(page, "/workspace/screenshots/bones.png");
+await page.keyboard.press("w");
+await page.waitForTimeout(400);
+await shot(page, "/workspace/screenshots/weights.png");
+await page.keyboard.press("w");
+await page.keyboard.press("k");
+await page.keyboard.press("2");
+await page.waitForTimeout(800);
+await shot(page, "/workspace/screenshots/smile.png");
+await page.keyboard.press("6");
+await page.waitForTimeout(1100);
+await shot(page, "/workspace/screenshots/arms-up.png");
 console.log("ERRORS", JSON.stringify(errors));
 await browser.close();
