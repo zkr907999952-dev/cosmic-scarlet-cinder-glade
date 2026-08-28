@@ -529,11 +529,34 @@ function placeGuts(source: THREE.Object3D, cavity: THREE.Box3, navel: THREE.Vect
   root.updateMatrixWorld(true);
   const baked = flattenToWorld(root);
   bakeIntoVertices(baked);
-  fitGutEnvelope(baked, cavity, profile);
+  liftTransverseColon(baked, navel.y, 0.038);
+  fitGutEnvelope(baked, cavity, profile, navel.y);
   return baked;
 }
 
-function fitGutEnvelope(group: THREE.Object3D, cavity: THREE.Box3, profile: TorsoSlice[]) {
+function liftTransverseColon(group: THREE.Object3D, navelY: number, extra: number) {
+  const box = new THREE.Box3().setFromObject(group);
+  const y0 = box.min.y;
+  const span = Math.max(1e-4, box.max.y - y0);
+  group.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos || !(pos.array instanceof Float32Array)) return;
+    const arr = pos.array;
+    for (let i = 0; i < pos.count; i++) {
+      const y = arr[i * 3 + 1]!;
+      const t = (y - y0) / span;
+      if (t < 0.48) continue;
+      const w = (t - 0.48) / 0.52;
+      arr[i * 3 + 1] = y + extra * w * w;
+    }
+    pos.needsUpdate = true;
+    mesh.geometry.computeBoundingBox();
+  });
+}
+
+function fitGutEnvelope(group: THREE.Object3D, cavity: THREE.Box3, profile: TorsoSlice[], navelY: number) {
   group.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh || !mesh.geometry) return;
@@ -546,12 +569,13 @@ function fitGutEnvelope(group: THREE.Object3D, cavity: THREE.Box3, profile: Tors
       const y = arr[i3 + 1]!;
       let z = arr[i3 + 2]!;
       const p = profileAt(profile, y);
-      const maxX = Math.max(0.05, p.halfX * 0.82);
+      const above = THREE.MathUtils.smoothstep(y, navelY + 0.08, navelY + 0.2);
+      const maxX = Math.max(0.05, p.halfX * (0.82 - above * 0.06));
       const ax = Math.abs(x);
-      if (ax > maxX) x = Math.sign(x) * (maxX + (ax - maxX) * 0.2);
-      const zFront = Math.min(cavity.max.z, p.zFront - 0.01);
+      if (ax > maxX) x = Math.sign(x) * (maxX + (ax - maxX) * 0.18);
+      const zFront = Math.min(cavity.max.z, p.zFront - 0.01 - above * 0.016);
       const zBack = cavity.min.z;
-      if (z > zFront) z = zFront + (z - zFront) * 0.15;
+      if (z > zFront) z = zFront + (z - zFront) * 0.12;
       if (z < zBack) z = zBack + (z - zBack) * 0.2;
       arr[i3] = x;
       arr[i3 + 2] = z;
@@ -635,7 +659,7 @@ function placePelvisPack(source: THREE.Object3D, crotch: THREE.Vector3, navel: T
   const ub = collectNamedBox(baked, /uterus/);
   if (ub) {
     const cz = (ub.min.z + ub.max.z) * 0.5;
-    const dy = navel.y - 0.08 - ub.max.y;
+    const dy = navel.y - 0.055 - ub.max.y;
     const dz = navel.z - 0.07 - cz;
     shiftNamedMeshes(baked, internals, 0, dy, dz);
   }
@@ -805,7 +829,7 @@ function FittedFigure({
       new THREE.Vector3(acx - 0.12, yNavel - 0.17, abdomen.min.z),
       new THREE.Vector3(acx + 0.12, yNavel + 0.17, abdomen.max.z),
     );
-    const waistProfile = sampleTorsoProfile(body, gutBox.min.y - 0.02, gutBox.max.y + 0.05);
+    const waistProfile = sampleTorsoProfile(body, gutBox.min.y - 0.02, gutBox.max.y + 0.08);
     const gut = placeGuts(intestines, gutBox, navel, waistProfile);
     polishOrgans(gut, "gut");
     if (uterusNow) liftGutsOffUterus(gut, uterusNow);
