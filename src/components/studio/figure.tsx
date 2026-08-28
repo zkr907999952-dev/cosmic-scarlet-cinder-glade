@@ -91,6 +91,103 @@ function findNavel(body: THREE.Object3D, height: number) {
   return best;
 }
 
+function collectSample(root: THREE.Object3D, test: (m: THREE.Mesh) => boolean, cap = 8000) {
+  const pts: THREE.Vector3[] = [];
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    if (!test(mesh)) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    const step = Math.max(1, Math.floor(pos.count / cap));
+    for (let i = 0; i < pos.count; i += step) {
+      const v = new THREE.Vector3().fromBufferAttribute(pos, i);
+      mesh.localToWorld(v);
+      pts.push(v);
+    }
+  });
+  return pts;
+}
+
+function pickBest(pts: THREE.Vector3[], pred: (p: THREE.Vector3) => boolean, score: (p: THREE.Vector3) => number, fallback: THREE.Vector3) {
+  let best = fallback.clone();
+  let bestS = -Infinity;
+  for (const p of pts) {
+    if (!pred(p)) continue;
+    const s = score(p);
+    if (s > bestS) {
+      bestS = s;
+      best.copy(p);
+    }
+  }
+  return best;
+}
+
+function sampleLandmarks(body: THREE.Object3D, navel: THREE.Vector3, height: number) {
+  const lm: Record<string, THREE.Vector3> = { navel: navel.clone() };
+  const dress = collectSample(body, (m) => /dress/.test(meshKey(m)));
+  const skin = collectSample(body, (m) => /skin/.test(meshKey(m)));
+  const headM = collectSample(body, (m) => /head/.test(meshKey(m)) && !/hair/.test(meshKey(m)));
+  const hair = collectSample(body, (m) => bindHint(m) === "hair");
+  const eyes = collectSample(body, (m) => /eye/.test(meshKey(m)));
+  const mouth = collectSample(body, (m) => /mouth/.test(meshKey(m)));
+  const ny = navel.y;
+
+  const avg = (pts: THREE.Vector3[], pred: (p: THREE.Vector3) => boolean, fb: THREE.Vector3) => {
+    let x = 0;
+    let y = 0;
+    let z = 0;
+    let n = 0;
+    for (const p of pts) {
+      if (!pred(p)) continue;
+      x += p.x;
+      y += p.y;
+      z += p.z;
+      n++;
+    }
+    return n ? new THREE.Vector3(x / n, y / n, z / n) : fb;
+  };
+
+  lm.head = avg(headM, () => true, new THREE.Vector3(0, height * 0.93, 0.03));
+  lm.jaw = avg(mouth, () => true, new THREE.Vector3(0, lm.head.y - 0.04, 0.06));
+  lm.eyeL = avg(eyes, (p) => p.x < 0, new THREE.Vector3(-0.03, lm.head.y + 0.005, 0.07));
+  lm.eyeR = avg(eyes, (p) => p.x >= 0, new THREE.Vector3(0.03, lm.head.y + 0.005, 0.07));
+  lm.neck = avg(headM, (p) => p.y < lm.head.y - 0.04, new THREE.Vector3(0, ny + 0.4, 0.02));
+  lm.hips = avg(skin, (p) => p.y > ny - 0.18 && p.y < ny - 0.06 && Math.abs(p.x) < 0.12, new THREE.Vector3(0, ny - 0.12, 0.01));
+  lm.spine1 = new THREE.Vector3(0, ny - 0.01, 0.02);
+  lm.spine2 = new THREE.Vector3(0, ny + 0.1, 0.02);
+  lm.spine3 = avg(dress, (p) => p.y > ny + 0.22 && p.y < ny + 0.32 && Math.abs(p.x) < 0.08, new THREE.Vector3(0, ny + 0.27, 0.02));
+  lm.lBreast = pickBest(dress, (p) => p.x < -0.03 && p.x > -0.14 && p.y > ny + 0.22 && p.y < ny + 0.36 && p.z > 0.03, (p) => p.z, new THREE.Vector3(-0.07, ny + 0.28, 0.09));
+  lm.rBreast = pickBest(dress, (p) => p.x > 0.03 && p.x < 0.14 && p.y > ny + 0.22 && p.y < ny + 0.36 && p.z > 0.03, (p) => p.z, new THREE.Vector3(0.07, ny + 0.28, 0.09));
+  lm.lClav = pickBest(dress, (p) => p.x < -0.04 && p.x > -0.12 && p.y > ny + 0.35 && p.y < ny + 0.44, (p) => -Math.abs(p.z), new THREE.Vector3(-0.07, ny + 0.39, 0.01));
+  lm.rClav = pickBest(dress, (p) => p.x > 0.04 && p.x < 0.12 && p.y > ny + 0.35 && p.y < ny + 0.44, (p) => -Math.abs(p.z), new THREE.Vector3(0.07, ny + 0.39, 0.01));
+  lm.lUpper = pickBest(dress, (p) => p.x < -0.12 && p.y > ny + 0.3 && p.y < ny + 0.42, (p) => -p.x, new THREE.Vector3(-0.16, ny + 0.36, 0.01));
+  lm.rUpper = pickBest(dress, (p) => p.x > 0.12 && p.y > ny + 0.3 && p.y < ny + 0.42, (p) => p.x, new THREE.Vector3(0.16, ny + 0.36, 0.01));
+  lm.lFore = pickBest(dress, (p) => p.x < -0.18 && p.y > ny - 0.05 && p.y < ny + 0.18, (p) => -p.x - Math.abs(p.y - (ny + 0.06)), new THREE.Vector3(-0.3, ny + 0.06, 0.02));
+  lm.rFore = pickBest(dress, (p) => p.x > 0.18 && p.y > ny - 0.05 && p.y < ny + 0.18, (p) => p.x - Math.abs(p.y - (ny + 0.06)), new THREE.Vector3(0.3, ny + 0.06, 0.02));
+  lm.lHand = pickBest(dress, (p) => p.x < -0.25 && p.y < ny - 0.05, (p) => -p.y - p.x * 0.3, new THREE.Vector3(-0.42, ny - 0.18, 0.03));
+  lm.rHand = pickBest(dress, (p) => p.x > 0.25 && p.y < ny - 0.05, (p) => -p.y + p.x * 0.3, new THREE.Vector3(0.42, ny - 0.18, 0.03));
+  lm.lThigh = avg(skin, (p) => p.x < -0.04 && p.y > ny - 0.28 && p.y < ny - 0.12, new THREE.Vector3(-0.09, ny - 0.2, 0.01));
+  lm.rThigh = avg(skin, (p) => p.x > 0.04 && p.y > ny - 0.28 && p.y < ny - 0.12, new THREE.Vector3(0.09, ny - 0.2, 0.01));
+  lm.lShin = avg(skin, (p) => p.x < -0.04 && p.y > 0.42 && p.y < 0.55, new THREE.Vector3(-0.09, 0.48, 0.02));
+  lm.rShin = avg(skin, (p) => p.x > 0.04 && p.y > 0.42 && p.y < 0.55, new THREE.Vector3(0.09, 0.48, 0.02));
+  lm.lAnkle = avg(skin, (p) => p.x < -0.04 && p.y > 0.07 && p.y < 0.16, new THREE.Vector3(-0.09, 0.1, 0.03));
+  lm.rAnkle = avg(skin, (p) => p.x > 0.04 && p.y > 0.07 && p.y < 0.16, new THREE.Vector3(0.09, 0.1, 0.03));
+  lm.lFoot = avg(skin, (p) => p.x < -0.04 && p.y < 0.07, new THREE.Vector3(-0.09, 0.035, 0.05));
+  lm.rFoot = avg(skin, (p) => p.x > 0.04 && p.y < 0.07, new THREE.Vector3(0.09, 0.035, 0.05));
+  lm.lToe = pickBest(skin, (p) => p.x < -0.03 && p.y < 0.06, (p) => p.z, new THREE.Vector3(-0.09, 0.025, 0.12));
+  lm.rToe = pickBest(skin, (p) => p.x > 0.03 && p.y < 0.06, (p) => p.z, new THREE.Vector3(0.09, 0.025, 0.12));
+
+  const hairTop = pickBest(hair, () => true, (p) => p.y, new THREE.Vector3(0, lm.head.y + 0.04, -0.02));
+  const hairBot = pickBest(hair, () => true, (p) => -p.y, new THREE.Vector3(0, lm.head.y - 0.7, -0.02));
+  lm.hair1 = hairTop;
+  lm.hair5 = hairBot;
+  lm.hair2 = new THREE.Vector3(0, hairTop.y * 0.75 + hairBot.y * 0.25, hairTop.z * 0.7 + hairBot.z * 0.3);
+  lm.hair3 = new THREE.Vector3(0, hairTop.y * 0.5 + hairBot.y * 0.5, hairTop.z * 0.45 + hairBot.z * 0.55);
+  lm.hair4 = new THREE.Vector3(0, hairTop.y * 0.25 + hairBot.y * 0.75, hairTop.z * 0.25 + hairBot.z * 0.75);
+  return lm;
+}
+
 function hideExternalGenitals(root: THREE.Object3D) {
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
@@ -207,6 +304,28 @@ function sampleBand(character: THREE.Object3D, y0: number, y1: number, maxAbsX =
   return { box, count };
 }
 
+function sliceWidths(root: THREE.Object3D, y0: number, y1: number, bands = 8) {
+  const dy = (y1 - y0) / bands;
+  const out = Array.from({ length: bands }, (_, i) => ({ y: y0 + (i + 0.5) * dy, halfX: 0, zF: -1, zB: 1 }));
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    for (let i = 0; i < pos.count; i += Math.max(1, Math.floor(pos.count / 12000))) {
+      _local.fromBufferAttribute(pos, i);
+      mesh.localToWorld(_local);
+      if (_local.y < y0 || _local.y > y1) continue;
+      const b = Math.min(bands - 1, Math.max(0, Math.floor((_local.y - y0) / dy)));
+      const s = out[b]!;
+      s.halfX = Math.max(s.halfX, Math.abs(_local.x));
+      s.zF = Math.max(s.zF, _local.z);
+      s.zB = Math.min(s.zB, _local.z);
+    }
+  });
+  return out.map((s) => ({ y: +s.y.toFixed(3), halfX: +s.halfX.toFixed(3), zF: +s.zF.toFixed(3) }));
+}
+
 function collectNamedBox(root: THREE.Object3D, re: RegExp) {
   const box = new THREE.Box3();
   box.makeEmpty();
@@ -232,15 +351,129 @@ function clampGroupToBox(group: THREE.Object3D, box: THREE.Box3, zPad = 0.012) {
   group.updateMatrixWorld(true);
 }
 
-function taperGutTop(group: THREE.Object3D) {
+type TorsoSlice = { y: number; halfX: number; zFront: number; zBack: number };
+
+function sampleTorsoProfile(body: THREE.Object3D, y0: number, y1: number, bands = 20): TorsoSlice[] {
+  const dy = (y1 - y0) / bands;
+  const slots: TorsoSlice[] = [];
+  const n = new Int16Array(bands);
+  for (let i = 0; i < bands; i++) {
+    slots.push({ y: y0 + (i + 0.5) * dy, halfX: 0.04, zFront: -1, zBack: 1 });
+  }
+  body.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    if (!isTorsoMesh(mesh)) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    const step = Math.max(1, Math.floor(pos.count / 10000));
+    for (let i = 0; i < pos.count; i += step) {
+      _local.fromBufferAttribute(pos, i);
+      mesh.localToWorld(_local);
+      if (_local.y < y0 || _local.y > y1) continue;
+      if (Math.abs(_local.x) > 0.16) continue;
+      if (_local.z < -0.02) continue;
+      const b = Math.min(bands - 1, Math.max(0, Math.floor((_local.y - y0) / dy)));
+      const s = slots[b]!;
+      s.halfX = Math.max(s.halfX, Math.abs(_local.x));
+      if (n[b] === 0) {
+        s.zFront = _local.z;
+        s.zBack = _local.z;
+      } else {
+        s.zFront = Math.max(s.zFront, _local.z);
+        s.zBack = Math.min(s.zBack, _local.z);
+      }
+      n[b]!++;
+    }
+  });
+  for (let i = 0; i < bands; i++) {
+    if (n[i]! > 4) continue;
+    const src = slots[i > 0 && n[i - 1]! > 4 ? i - 1 : Math.min(bands - 1, i + 1)]!;
+    slots[i]!.halfX = src.halfX;
+    slots[i]!.zFront = src.zFront;
+    slots[i]!.zBack = src.zBack;
+  }
+  return slots;
+}
+
+function profileAt(profile: TorsoSlice[], y: number): TorsoSlice {
+  if (y <= profile[0]!.y) return profile[0]!;
+  const last = profile[profile.length - 1]!;
+  if (y >= last.y) return last;
+  for (let i = 0; i < profile.length - 1; i++) {
+    const a = profile[i]!;
+    const b = profile[i + 1]!;
+    if (y > b.y) continue;
+    const t = (y - a.y) / Math.max(1e-5, b.y - a.y);
+    return {
+      y,
+      halfX: a.halfX + (b.halfX - a.halfX) * t,
+      zFront: a.zFront + (b.zFront - a.zFront) * t,
+      zBack: a.zBack + (b.zBack - a.zBack) * t,
+    };
+  }
+  return last;
+}
+
+function placeGuts(source: THREE.Object3D, cavity: THREE.Box3, navel: THREE.Vector3, profile: TorsoSlice[]) {
+  const root = cloneGraph(source);
+  root.updateMatrixWorld(true);
+  const src = new THREE.Box3().setFromObject(root);
+  const ss = src.getSize(new THREE.Vector3());
+  const ts = cavity.getSize(new THREE.Vector3());
+  const sy = ts.y / Math.max(ss.y, 1e-4);
+  const sx = (ts.x / Math.max(ss.x, 1e-4)) * 0.98;
+  const sz = (ts.z / Math.max(ss.z, 1e-4)) * 1.1;
+  root.scale.set(sx, sy, sz);
+  root.updateMatrixWorld(true);
+  const after = new THREE.Box3().setFromObject(root);
+  const ac = after.getCenter(new THREE.Vector3());
+  const tc = cavity.getCenter(new THREE.Vector3());
+  root.position.x += tc.x - ac.x;
+  root.position.y += tc.y - ac.y;
+  root.updateMatrixWorld(true);
+  const after2 = new THREE.Box3().setFromObject(root);
+  root.position.z += cavity.max.z - after2.max.z;
+  root.updateMatrixWorld(true);
+  const baked = flattenToWorld(root);
+  bakeIntoVertices(baked);
+  shapeGutToProfile(baked, cavity, navel, profile);
+  return baked;
+}
+
+function shapeGutToProfile(group: THREE.Object3D, cavity: THREE.Box3, navel: THREE.Vector3, profile: TorsoSlice[]) {
   const box = new THREE.Box3().setFromObject(group);
   const y0 = box.min.y;
   const y1 = box.max.y;
   const span = Math.max(1e-4, y1 - y0);
   const cx = (box.min.x + box.max.x) * 0.5;
-  const cz = (box.min.z + box.max.z) * 0.5;
-  const cutHi = y0 + span * 0.4;
-  const cutLo = y0 + span * 0.48;
+  const ny = navel.y;
+  const yLo = cavity.min.y;
+  const yHi = cavity.max.y;
+
+  group.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos || !(pos.array instanceof Float32Array)) return;
+    const arr = pos.array;
+    for (let i = 0; i < pos.count; i++) {
+      const t = THREE.MathUtils.clamp((arr[i * 3 + 1]! - y0) / span, 0, 1);
+      arr[i * 3 + 1] = yLo + t * (yHi - yLo);
+    }
+    pos.needsUpdate = true;
+  });
+
+  const box2 = new THREE.Box3().setFromObject(group);
+  const y0b = box2.min.y;
+  const y1b = box2.max.y;
+  const spanb = Math.max(1e-4, y1b - y0b);
+  const bands = 24;
+  const gutHalf = new Float32Array(bands);
+  const gutZ0 = new Float32Array(bands);
+  const gutZ1 = new Float32Array(bands);
+  gutZ0.fill(1e3);
+  gutZ1.fill(-1e3);
   group.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh || !mesh.geometry) return;
@@ -249,45 +482,55 @@ function taperGutTop(group: THREE.Object3D) {
     const arr = pos.array;
     for (let i = 0; i < pos.count; i++) {
       const y = arr[i * 3 + 1]!;
-      if (y > cutHi) {
-        const k = (y - cutHi) / Math.max(1e-4, y1 - cutHi);
-        const s = 1 - k * k * 0.48;
-        arr[i * 3] = cx + (arr[i * 3]! - cx) * s;
-        arr[i * 3 + 2] = cz + (arr[i * 3 + 2]! - cz) * s;
-        arr[i * 3 + 1] = cutHi + (y - cutHi) * (1 - k * 0.28);
-      } else if (y < cutLo) {
-        const k = 1 - (y - y0) / Math.max(1e-4, cutLo - y0);
-        const s = 1 + k * k * 0.22;
-        arr[i * 3] = cx + (arr[i * 3]! - cx) * s;
-        arr[i * 3 + 2] = cz + (arr[i * 3 + 2]! - cz) * s;
-      }
+      const b = Math.min(bands - 1, Math.max(0, Math.floor(((y - y0b) / spanb) * bands)));
+      gutHalf[b] = Math.max(gutHalf[b]!, Math.abs(arr[i * 3]! - cx));
+      gutZ0[b] = Math.min(gutZ0[b]!, arr[i * 3 + 2]!);
+      gutZ1[b] = Math.max(gutZ1[b]!, arr[i * 3 + 2]!);
+    }
+  });
+  for (let b = 0; b < bands; b++) {
+    if (gutHalf[b]! < 1e-4) gutHalf[b] = 0.08;
+    if (gutZ1[b]! < gutZ0[b]!) {
+      gutZ0[b] = cavity.min.z;
+      gutZ1[b] = cavity.max.z;
+    }
+  }
+
+  group.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos || !(pos.array instanceof Float32Array)) return;
+    const arr = pos.array;
+    for (let i = 0; i < pos.count; i++) {
+      const i3 = i * 3;
+      let x = arr[i3]!;
+      const y = arr[i3 + 1]!;
+      let z = arr[i3 + 2]!;
+      const b = Math.min(bands - 1, Math.max(0, Math.floor(((y - y0b) / spanb) * bands)));
+      const p = profileAt(profile, y);
+      const mid = 1 - Math.min(1, Math.abs(y - ny) / 0.13);
+      const above = THREE.MathUtils.clamp((y - (ny + 0.07)) / 0.08, 0, 1);
+      const below = THREE.MathUtils.clamp((ny - 0.1 - y) / 0.06, 0, 1);
+      const fill = 0.64 + mid * 0.1 - above * 0.16 - below * 0.06;
+      const targetHalf = Math.max(0.05, p.halfX * fill);
+      const sx = Math.min(1.15, targetHalf / Math.max(gutHalf[b]!, 1e-4));
+      x = cx + (x - cx) * sx;
+      if (x > cx + targetHalf) x = cx + targetHalf;
+      if (x < cx - targetHalf) x = cx - targetHalf;
+      const zFront = Math.min(cavity.max.z, p.zFront - 0.026 - above * 0.012);
+      const zBack = Math.max(cavity.min.z, p.zFront - 0.088);
+      const gz0 = gutZ0[b]!;
+      const gz1 = Math.max(gz0 + 1e-4, gutZ1[b]!);
+      const zt = (z - gz0) / (gz1 - gz0);
+      z = zBack + (zFront - zBack) * THREE.MathUtils.clamp(zt, 0, 1);
+      arr[i3] = x;
+      arr[i3 + 2] = z;
     }
     pos.needsUpdate = true;
     mesh.geometry.computeBoundingBox();
+    mesh.geometry.computeBoundingSphere();
   });
-}
-
-function placeInFront(source: THREE.Object3D, box: THREE.Box3, fillW: number, frontZ: number) {
-  const root = cloneGraph(source);
-  root.updateMatrixWorld(true);
-  _box.setFromObject(root);
-  _box.getSize(_size);
-  const ts = box.getSize(new THREE.Vector3());
-  const tc = box.getCenter(new THREE.Vector3());
-  const s = Math.min((ts.x / Math.max(_size.x, 1e-4)) * fillW, (ts.y / Math.max(_size.y, 1e-4)) * 1.2);
-  root.scale.multiplyScalar(s);
-  root.updateMatrixWorld(true);
-  const ob = new THREE.Box3().setFromObject(root);
-  const oc = ob.getCenter(new THREE.Vector3());
-  root.position.x += tc.x - oc.x;
-  root.position.y += tc.y - oc.y;
-  root.updateMatrixWorld(true);
-  const ob2 = new THREE.Box3().setFromObject(root);
-  root.position.z += frontZ - ob2.max.z;
-  root.updateMatrixWorld(true);
-  const baked = flattenToWorld(root);
-  bakeIntoVertices(baked);
-  return baked;
 }
 
 function placePelvisPack(source: THREE.Object3D, uterusTarget: THREE.Vector3, frontZ: number) {
@@ -417,7 +660,7 @@ function FittedFigure({
   const poseRef = useRef(useStudio.getState().pose);
   const grab = useRef<{
     active: boolean;
-    mode: "press" | "drag";
+    mode: "pose" | "drag";
     origin: THREE.Vector3;
     planePoint: THREE.Vector3;
     normal: THREE.Vector3;
@@ -443,7 +686,7 @@ function FittedFigure({
     const yNavel = navel.y;
     const yAb0 = yNavel - 0.08;
     const yAb1 = yNavel + 0.11;
-    const yX0 = yNavel - 0.16;
+    const yX0 = yNavel - 0.18;
     const yX1 = yNavel + 0.16;
 
     const abSample = sampleBand(body, yAb0, yAb1, 0.12);
@@ -456,15 +699,15 @@ function FittedFigure({
     abdomen.min.x = acx - abx;
     abdomen.max.x = acx + abx;
     const skinZ = navel.z;
-    abdomen.max.z = skinZ - 0.012;
-    abdomen.min.z = skinZ - 0.11;
+    abdomen.max.z = skinZ - 0.022;
+    abdomen.min.z = skinZ - 0.092;
 
     const gutBox = new THREE.Box3(
-      new THREE.Vector3(abdomen.min.x, yNavel - 0.09, abdomen.min.z),
-      new THREE.Vector3(abdomen.max.x, yNavel + 0.1, abdomen.max.z),
+      new THREE.Vector3(acx - 0.115, yNavel - 0.125, abdomen.min.z),
+      new THREE.Vector3(acx + 0.115, yNavel + 0.115, abdomen.max.z),
     );
-    const gut = placeInFront(intestines, gutBox, 1.08, skinZ - 0.016);
-    taperGutTop(gut);
+    const waistProfile = sampleTorsoProfile(body, gutBox.min.y - 0.02, gutBox.max.y + 0.04);
+    const gut = placeGuts(intestines, gutBox, navel, waistProfile);
     polishOrgans(gut, "gut");
     gut.visible = false;
     root.add(gut);
@@ -480,7 +723,10 @@ function FittedFigure({
     root.add(bellyLight);
 
     const armSpan = Math.max(charBox.max.x, -charBox.min.x);
-    const skeleton = new SoftSkeleton(navel, height, armSpan);
+    const landmarks = sampleLandmarks(body, navel, height);
+    landmarks.lHand ??= new THREE.Vector3(-armSpan * 0.85, yNavel - 0.2, 0.03);
+    landmarks.rHand ??= new THREE.Vector3(armSpan * 0.85, yNavel - 0.2, 0.03);
+    const skeleton = new SoftSkeleton(landmarks, height);
     const boundGeos: THREE.BufferGeometry[] = [];
     const weightViews: { mesh: THREE.Mesh; orig: THREE.Material | THREE.Material[]; weight: THREE.Material }[] = [];
 
@@ -569,6 +815,12 @@ function FittedFigure({
         guts: { min: gutBoxNow.min.toArray(), max: gutBoxNow.max.toArray() },
         navel: navel.toArray(),
         uterus: uterusTarget.toArray(),
+        waist: waistProfile.map((s) => ({
+          y: +s.y.toFixed(3),
+          halfX: +s.halfX.toFixed(3),
+          zF: +s.zFront.toFixed(3),
+        })),
+        gutBands: sliceWidths(gut, gutBoxNow.min.y, gutBoxNow.max.y, 8),
         bones: skeleton.names,
         bound: boundGeos.length,
       };
@@ -615,6 +867,7 @@ function FittedFigure({
 
   useEffect(() => {
     const onUp = () => {
+      if (grab.current?.mode === "pose") setup.skeleton.commitPose();
       grab.current = null;
       setup.skeleton.clearHold();
       useStudio.getState().setGrabbing(false);
@@ -664,19 +917,13 @@ function FittedFigure({
       raycaster.setFromCamera(_ndc, camera);
       _ray.copy(raycaster.ray);
       const o = grab.current.origin;
-      const nrm = grab.current.normal;
       const bone = grab.current.bone;
-      if (grab.current.mode === "press") {
-        let depth = 0.055;
-        if (_ray.intersectPlane(_plane, _target)) {
-          const along = _target.clone().sub(o).dot(nrm);
-          depth = THREE.MathUtils.clamp(0.04 - along * 0.65, 0.03, 0.1);
-          pokeRef.current?.position.copy(o.clone().addScaledVector(nrm, -depth * 0.4));
+      if (_ray.intersectPlane(_plane, _target)) {
+        if (grab.current.mode === "pose") {
+          setup.skeleton.setPoseDrag(bone, o.x, o.y, o.z, _target.x, _target.y, _target.z);
+        } else {
+          setup.skeleton.setTissueDrag(o.x, o.y, o.z, _target.x, _target.y, _target.z, 0.16);
         }
-        setup.skeleton.setPress(bone, nrm.x, nrm.y, nrm.z, depth);
-        if (pokeRef.current) pokeRef.current.visible = true;
-      } else if (_ray.intersectPlane(_plane, _target)) {
-        setup.skeleton.setDrag(bone, o.x, o.y, o.z, _target.x, _target.y, _target.z);
         if (pokeRef.current) {
           pokeRef.current.position.copy(_target);
           pokeRef.current.visible = true;
@@ -746,7 +993,7 @@ function FittedFigure({
     return g;
   }, [setup]);
 
-  const beginGrab = (point: THREE.Vector3, normal: THREE.Vector3, mode: "press" | "drag") => {
+  const beginGrab = (point: THREE.Vector3, normal: THREE.Vector3, mode: "pose" | "drag") => {
     grab.current = {
       active: true,
       mode,

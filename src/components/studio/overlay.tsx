@@ -79,7 +79,7 @@ export function Overlay() {
       if (e.key === "h" || e.key === "H") setParam("uiHidden", !useStudio.getState().uiHidden);
       if (e.key === "t" || e.key === "T") {
         const cur = useStudio.getState().interactMode;
-        setInteractMode(cur === "press" ? "drag" : "press");
+        setInteractMode(cur === "drag" ? "pose" : "drag");
       }
       if (e.key === "x" || e.key === "X") {
         const cur = useStudio.getState().abdomenXray;
@@ -185,7 +185,7 @@ export function Overlay() {
 
       <div className="pointer-events-none absolute top-20 left-4 hidden w-44 sm:block sm:left-6">
         <p className="text-xs leading-snug text-muted text-pretty">
-          左键空白处旋转。点身体：按压内推，拖拽带动骨骼。菜单可切表情/动作，显示骨骼与绑定。K 骨骼 · W 绑定 · 1-4 表情 · 5-0 动作 · X 透视。
+          左键空白处旋转。拖拽：在骨骼上捏软组织。姿势：拉关节，松手后保持。K 骨骼 · W 绑定 · 1-4 表情 · 5-0 动作 · X 透视。
         </p>
         <div className="mt-4">
           <div className="mb-1 flex items-center justify-between text-xs tracking-wide text-muted uppercase">
@@ -198,7 +198,7 @@ export function Overlay() {
               style={{ width: `${energyNorm * 100}%` }}
             />
           </div>
-          <p className="mt-3 text-xs text-muted">{grabbing ? (interactMode === "drag" ? "拖拽中" : "按压中") : "待机"}</p>
+          <p className="mt-3 text-xs text-muted">{grabbing ? (interactMode === "pose" ? "调姿中" : "拖拽中") : "待机"}</p>
         </div>
       </div>
 
@@ -338,19 +338,6 @@ export function Overlay() {
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={() => setInteractMode("press")}
-            className={cn(
-              "inline-flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors duration-fast",
-              interactMode === "press"
-                ? "bg-accent text-accent-fg"
-                : "border border-border bg-surface-2 text-muted hover:text-fg",
-            )}
-          >
-            <MousePointerClick className="size-4" />
-            按压
-          </button>
-          <button
-            type="button"
             onClick={() => setInteractMode("drag")}
             className={cn(
               "inline-flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors duration-fast",
@@ -361,6 +348,19 @@ export function Overlay() {
           >
             <Hand className="size-4" />
             拖拽
+          </button>
+          <button
+            type="button"
+            onClick={() => setInteractMode("pose")}
+            className={cn(
+              "inline-flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors duration-fast",
+              interactMode === "pose"
+                ? "bg-accent text-accent-fg"
+                : "border border-border bg-surface-2 text-muted hover:text-fg",
+            )}
+          >
+            <MousePointerClick className="size-4" />
+            姿势
           </button>
         </div>
 
@@ -386,10 +386,10 @@ export function Overlay() {
 
       <div className="pointer-events-none absolute bottom-auto left-4 hidden items-center gap-2 text-xs text-muted sm:bottom-6 sm:flex">
         <Hand className="size-3.5" />
-        <span>{interactMode === "drag" ? "拖拽" : "按压"}</span>
+        <span>{interactMode === "pose" ? "姿势" : "拖拽"}</span>
         <span className="text-border">/</span>
         <Activity className="size-3.5" />
-        <span>左键旋转 · 点身体操作 · T 切换 · X 透视 · K 骨骼 · W 绑定</span>
+        <span>左键旋转 · 点身体操作 · T 拖拽/姿势 · X 透视 · K 骨骼 · W 绑定</span>
       </div>
         </>
       )}

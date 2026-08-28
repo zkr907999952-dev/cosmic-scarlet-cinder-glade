@@ -74,7 +74,7 @@ await page.keyboard.press("2");
 await page.waitForTimeout(800);
 await shot(page, "/workspace/screenshots/smile.png");
 await page.keyboard.press("6");
-await page.waitForTimeout(1100);
+await page.waitForTimeout(600);
 await shot(page, "/workspace/screenshots/arms-up.png");
 console.log("ERRORS", JSON.stringify(errors));
 await browser.close();

@@ -36,11 +36,14 @@ export type SkinBinding = {
   index: Uint8Array;
   weight: Float32Array;
   colors: Float32Array;
+  softness: Float32Array;
+  delta: Float32Array;
+  dprev: Float32Array;
 };
 
 type Hold =
-  | { mode: "drag"; bone: number; gx: number; gy: number; gz: number; tx: number; ty: number; tz: number }
-  | { mode: "press"; bone: number; nx: number; ny: number; nz: number; depth: number };
+  | { kind: "pose"; bone: number; gx: number; gy: number; gz: number; tx: number; ty: number; tz: number }
+  | { kind: "tissue"; gx: number; gy: number; gz: number; tx: number; ty: number; tz: number; radius: number };
 
 const _q = new THREE.Quaternion();
 const _from = new THREE.Vector3();
@@ -51,7 +54,7 @@ const _e = new THREE.Euler();
 const IDENTITY = new THREE.Quaternion();
 const _c = new THREE.Color();
 
-type Group = "body" | "face" | "hair" | "breast" | "foot";
+type Group = "body" | "face" | "hair" | "foot";
 
 type BoneDef = {
   name: string;
@@ -61,7 +64,6 @@ type BoneDef = {
   z: number;
   radius: number;
   maxAng: number;
-  slide: number;
   group: Group;
 };
 
@@ -82,8 +84,19 @@ function distToSeg(px: number, py: number, pz: number, ax: number, ay: number, a
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
+function smoother(d: number, r: number) {
+  const t = d / Math.max(r, 1e-4);
+  if (t >= 1) return 0;
+  const u = 1 - t;
+  return u * u * u * (u * (u * 6 - 15) + 10);
+}
+
 function hueColor(i: number, out: THREE.Color) {
-  return out.setHSL((i * 0.17) % 1, 0.72, 0.55);
+  return out.setHSL((i * 0.17) % 1, 0.62, 0.55);
+}
+
+function pt(lm: Record<string, THREE.Vector3>, name: string, fb: THREE.Vector3) {
+  return lm[name] ?? fb;
 }
 
 export class SoftSkeleton {
@@ -92,7 +105,6 @@ export class SoftSkeleton {
   readonly rest: Float32Array;
   readonly radius: Float32Array;
   readonly maxAng: Float32Array;
-  readonly slide: Float32Array;
   readonly group: Group[] = [];
   readonly count: number;
   energy = 0;
@@ -101,72 +113,101 @@ export class SoftSkeleton {
 
   private readonly q: THREE.Quaternion[] = [];
   private readonly qv: THREE.Vector3[] = [];
-  private readonly off: THREE.Vector3[] = [];
-  private readonly ov: THREE.Vector3[] = [];
   private readonly wpos: THREE.Vector3[] = [];
   private readonly wrot: THREE.Quaternion[] = [];
   private readonly poseQ: THREE.Quaternion[] = [];
-  private readonly poseOff: THREE.Vector3[] = [];
   private readonly exprQ: THREE.Quaternion[] = [];
   private readonly exprOff: THREE.Vector3[] = [];
+  private readonly off: THREE.Vector3[] = [];
   private hold: Hold | null = null;
   private readonly bindings: SkinBinding[] = [];
   private readonly headY: number;
   private readonly bustY: number;
+  private readonly navelY: number;
   private readonly byName: Record<string, number> = {};
 
-  constructor(navel: THREE.Vector3, height: number, armSpan: number) {
+  constructor(lm: Record<string, THREE.Vector3>, height: number) {
+    const navel = pt(lm, "navel", new THREE.Vector3(0, height * 0.62, 0.1));
     const ny = navel.y;
-    const nz = navel.z * 0.12;
-    const as = Math.min(0.52, Math.max(0.36, armSpan));
-    const hy = height * 0.925;
-    const fy = height * 0.895;
-    this.headY = hy;
-    this.bustY = ny + 0.28;
+    this.navelY = ny;
+    this.headY = pt(lm, "head", new THREE.Vector3(0, height * 0.93, 0.02)).y;
+    this.bustY = pt(lm, "lBreast", new THREE.Vector3(-0.07, ny + 0.28, 0.08)).y;
+
+    const h = (name: string, x: number, y: number, z: number) => pt(lm, name, new THREE.Vector3(x, y, z));
+    const hips = h("hips", 0, ny - 0.12, 0.01);
+    const spine1 = h("spine1", 0, ny - 0.01, 0.02);
+    const spine2 = h("spine2", 0, ny + 0.11, 0.02);
+    const spine3 = h("spine3", 0, ny + 0.27, 0.015);
+    const neck = h("neck", 0, ny + 0.41, 0.01);
+    const head = h("head", 0, this.headY, 0.02);
+    const jaw = h("jaw", 0, this.headY - 0.035, 0.055);
+    const eyeL = h("eyeL", -0.03, this.headY + 0.005, 0.07);
+    const eyeR = h("eyeR", 0.03, this.headY + 0.005, 0.07);
+    const lClav = h("lClav", -0.06, ny + 0.39, 0.01);
+    const rClav = h("rClav", 0.06, ny + 0.39, 0.01);
+    const lUpper = h("lUpper", -0.16, ny + 0.36, 0.01);
+    const rUpper = h("rUpper", 0.16, ny + 0.36, 0.01);
+    const lFore = h("lFore", -0.28, ny + 0.08, 0.02);
+    const rFore = h("rFore", 0.28, ny + 0.08, 0.02);
+    const lHand = h("lHand", -0.42, ny - 0.18, 0.03);
+    const rHand = h("rHand", 0.42, ny - 0.18, 0.03);
+    const lThigh = h("lThigh", -0.09, ny - 0.22, 0.01);
+    const rThigh = h("rThigh", 0.09, ny - 0.22, 0.01);
+    const lShin = h("lShin", -0.09, 0.48, 0.02);
+    const rShin = h("rShin", 0.09, 0.48, 0.02);
+    const lAnkle = h("lAnkle", -0.09, 0.1, 0.03);
+    const rAnkle = h("rAnkle", 0.09, 0.1, 0.03);
+    const lFoot = h("lFoot", -0.09, 0.035, 0.06);
+    const rFoot = h("rFoot", 0.09, 0.035, 0.06);
+    const lToe = h("lToe", -0.09, 0.025, 0.13);
+    const rToe = h("rToe", 0.09, 0.025, 0.13);
+    const hair1 = h("hair1", 0, this.headY + 0.04, -0.03);
+    const hair2 = h("hair2", 0, this.headY - 0.12, -0.08);
+    const hair3 = h("hair3", 0, this.headY - 0.3, -0.07);
+    const hair4 = h("hair4", 0, this.headY - 0.5, -0.04);
+    const hair5 = h("hair5", 0, this.headY - 0.7, -0.02);
 
     const defs: BoneDef[] = [
-      { name: "hips", parent: null, x: 0, y: ny - 0.13, z: nz, radius: 0.12, maxAng: 0.22, slide: 0, group: "body" },
-      { name: "spine1", parent: "hips", x: 0, y: ny - 0.02, z: nz + 0.01, radius: 0.1, maxAng: 0.55, slide: 0.018, group: "body" },
-      { name: "spine2", parent: "spine1", x: 0, y: ny + 0.12, z: nz + 0.012, radius: 0.095, maxAng: 0.5, slide: 0.012, group: "body" },
-      { name: "spine3", parent: "spine2", x: 0, y: ny + 0.26, z: nz + 0.01, radius: 0.11, maxAng: 0.45, slide: 0.01, group: "body" },
-      { name: "neck", parent: "spine3", x: 0, y: ny + 0.4, z: nz + 0.005, radius: 0.05, maxAng: 0.7, slide: 0, group: "body" },
-      { name: "head", parent: "neck", x: 0, y: hy, z: nz + 0.02, radius: 0.09, maxAng: 0.55, slide: 0, group: "body" },
-      { name: "jaw", parent: "head", x: 0, y: fy, z: nz + 0.055, radius: 0.045, maxAng: 0.7, slide: 0.012, group: "face" },
-      { name: "browL", parent: "head", x: -0.028, y: hy + 0.018, z: nz + 0.06, radius: 0.028, maxAng: 0.4, slide: 0.01, group: "face" },
-      { name: "browR", parent: "head", x: 0.028, y: hy + 0.018, z: nz + 0.06, radius: 0.028, maxAng: 0.4, slide: 0.01, group: "face" },
-      { name: "eyeL", parent: "head", x: -0.032, y: hy + 0.002, z: nz + 0.07, radius: 0.024, maxAng: 0.35, slide: 0.006, group: "face" },
-      { name: "eyeR", parent: "head", x: 0.032, y: hy + 0.002, z: nz + 0.07, radius: 0.024, maxAng: 0.35, slide: 0.006, group: "face" },
-      { name: "cheekL", parent: "head", x: -0.042, y: fy + 0.01, z: nz + 0.055, radius: 0.03, maxAng: 0.3, slide: 0.01, group: "face" },
-      { name: "cheekR", parent: "head", x: 0.042, y: fy + 0.01, z: nz + 0.055, radius: 0.03, maxAng: 0.3, slide: 0.01, group: "face" },
-      { name: "mouthL", parent: "jaw", x: -0.022, y: fy - 0.004, z: nz + 0.068, radius: 0.022, maxAng: 0.45, slide: 0.01, group: "face" },
-      { name: "mouthR", parent: "jaw", x: 0.022, y: fy - 0.004, z: nz + 0.068, radius: 0.022, maxAng: 0.45, slide: 0.01, group: "face" },
-      { name: "hair1", parent: "head", x: 0, y: hy + 0.04, z: nz - 0.03, radius: 0.09, maxAng: 0.55, slide: 0.02, group: "hair" },
-      { name: "hair2", parent: "hair1", x: 0, y: hy - 0.1, z: nz - 0.08, radius: 0.1, maxAng: 0.75, slide: 0.03, group: "hair" },
-      { name: "hair3", parent: "hair2", x: 0, y: hy - 0.28, z: nz - 0.07, radius: 0.11, maxAng: 0.95, slide: 0.04, group: "hair" },
-      { name: "hair4", parent: "hair3", x: 0, y: hy - 0.48, z: nz - 0.04, radius: 0.11, maxAng: 1.05, slide: 0.045, group: "hair" },
-      { name: "hair5", parent: "hair4", x: 0, y: hy - 0.68, z: nz - 0.02, radius: 0.1, maxAng: 1.15, slide: 0.05, group: "hair" },
-      { name: "tongue", parent: "jaw", x: 0, y: fy - 0.01, z: nz + 0.05, radius: 0.02, maxAng: 0.5, slide: 0.008, group: "face" },
-      { name: "belly", parent: "spine1", x: 0, y: ny, z: navel.z - 0.05, radius: 0.11, maxAng: 0.35, slide: 0.08, group: "body" },
-      { name: "lBreast", parent: "spine3", x: -0.078, y: this.bustY, z: 0.09, radius: 0.078, maxAng: 0.42, slide: 0.07, group: "breast" },
-      { name: "rBreast", parent: "spine3", x: 0.078, y: this.bustY, z: 0.09, radius: 0.078, maxAng: 0.42, slide: 0.07, group: "breast" },
-      { name: "lClav", parent: "spine3", x: -0.07, y: ny + 0.38, z: nz, radius: 0.055, maxAng: 0.55, slide: 0, group: "body" },
-      { name: "lUpper", parent: "lClav", x: -as * 0.4, y: ny + 0.32, z: nz, radius: 0.065, maxAng: 1.15, slide: 0, group: "body" },
-      { name: "lFore", parent: "lUpper", x: -as * 0.7, y: ny - 0.02, z: nz + 0.02, radius: 0.05, maxAng: 1.3, slide: 0, group: "body" },
-      { name: "lHand", parent: "lFore", x: -as * 0.92, y: ny - 0.2, z: nz + 0.03, radius: 0.045, maxAng: 0.8, slide: 0, group: "body" },
-      { name: "rClav", parent: "spine3", x: 0.07, y: ny + 0.38, z: nz, radius: 0.055, maxAng: 0.55, slide: 0, group: "body" },
-      { name: "rUpper", parent: "rClav", x: as * 0.4, y: ny + 0.32, z: nz, radius: 0.065, maxAng: 1.15, slide: 0, group: "body" },
-      { name: "rFore", parent: "rUpper", x: as * 0.7, y: ny - 0.02, z: nz + 0.02, radius: 0.05, maxAng: 1.3, slide: 0, group: "body" },
-      { name: "rHand", parent: "rFore", x: as * 0.92, y: ny - 0.2, z: nz + 0.03, radius: 0.045, maxAng: 0.8, slide: 0, group: "body" },
-      { name: "lThigh", parent: "hips", x: -0.085, y: ny - 0.24, z: nz, radius: 0.085, maxAng: 0.85, slide: 0, group: "body" },
-      { name: "lShin", parent: "lThigh", x: -0.09, y: 0.48, z: nz + 0.01, radius: 0.065, maxAng: 1.0, slide: 0, group: "body" },
-      { name: "lAnkle", parent: "lShin", x: -0.09, y: 0.12, z: nz + 0.02, radius: 0.07, maxAng: 0.85, slide: 0, group: "foot" },
-      { name: "lFoot", parent: "lAnkle", x: -0.09, y: 0.04, z: 0.06, radius: 0.075, maxAng: 0.65, slide: 0, group: "foot" },
-      { name: "lToe", parent: "lFoot", x: -0.09, y: 0.028, z: 0.125, radius: 0.055, maxAng: 0.5, slide: 0, group: "foot" },
-      { name: "rThigh", parent: "hips", x: 0.085, y: ny - 0.24, z: nz, radius: 0.085, maxAng: 0.85, slide: 0, group: "body" },
-      { name: "rShin", parent: "rThigh", x: 0.09, y: 0.48, z: nz + 0.01, radius: 0.065, maxAng: 1.0, slide: 0, group: "body" },
-      { name: "rAnkle", parent: "rShin", x: 0.09, y: 0.12, z: nz + 0.02, radius: 0.07, maxAng: 0.85, slide: 0, group: "foot" },
-      { name: "rFoot", parent: "rAnkle", x: 0.09, y: 0.04, z: 0.06, radius: 0.075, maxAng: 0.65, slide: 0, group: "foot" },
-      { name: "rToe", parent: "rFoot", x: 0.09, y: 0.028, z: 0.125, radius: 0.055, maxAng: 0.5, slide: 0, group: "foot" },
+      { name: "hips", parent: null, x: hips.x, y: hips.y, z: hips.z, radius: 0.16, maxAng: 0.35, group: "body" },
+      { name: "spine1", parent: "hips", x: spine1.x, y: spine1.y, z: spine1.z, radius: 0.15, maxAng: 0.55, group: "body" },
+      { name: "spine2", parent: "spine1", x: spine2.x, y: spine2.y, z: spine2.z, radius: 0.15, maxAng: 0.5, group: "body" },
+      { name: "spine3", parent: "spine2", x: spine3.x, y: spine3.y, z: spine3.z, radius: 0.17, maxAng: 0.45, group: "body" },
+      { name: "neck", parent: "spine3", x: neck.x, y: neck.y, z: neck.z, radius: 0.08, maxAng: 0.7, group: "body" },
+      { name: "head", parent: "neck", x: head.x, y: head.y, z: head.z, radius: 0.12, maxAng: 0.55, group: "body" },
+      { name: "jaw", parent: "head", x: jaw.x, y: jaw.y, z: jaw.z, radius: 0.055, maxAng: 0.7, group: "face" },
+      { name: "browL", parent: "head", x: eyeL.x, y: eyeL.y + 0.018, z: eyeL.z - 0.01, radius: 0.04, maxAng: 0.4, group: "face" },
+      { name: "browR", parent: "head", x: eyeR.x, y: eyeR.y + 0.018, z: eyeR.z - 0.01, radius: 0.04, maxAng: 0.4, group: "face" },
+      { name: "eyeL", parent: "head", x: eyeL.x, y: eyeL.y, z: eyeL.z, radius: 0.032, maxAng: 0.3, group: "face" },
+      { name: "eyeR", parent: "head", x: eyeR.x, y: eyeR.y, z: eyeR.z, radius: 0.032, maxAng: 0.3, group: "face" },
+      { name: "cheekL", parent: "head", x: jaw.x - 0.038, y: jaw.y + 0.012, z: jaw.z, radius: 0.04, maxAng: 0.3, group: "face" },
+      { name: "cheekR", parent: "head", x: jaw.x + 0.038, y: jaw.y + 0.012, z: jaw.z, radius: 0.04, maxAng: 0.3, group: "face" },
+      { name: "mouthL", parent: "jaw", x: jaw.x - 0.02, y: jaw.y - 0.002, z: jaw.z + 0.012, radius: 0.03, maxAng: 0.4, group: "face" },
+      { name: "mouthR", parent: "jaw", x: jaw.x + 0.02, y: jaw.y - 0.002, z: jaw.z + 0.012, radius: 0.03, maxAng: 0.4, group: "face" },
+      { name: "tongue", parent: "jaw", x: jaw.x, y: jaw.y - 0.008, z: jaw.z, radius: 0.024, maxAng: 0.45, group: "face" },
+      { name: "hair1", parent: "head", x: hair1.x, y: hair1.y, z: hair1.z, radius: 0.12, maxAng: 0.55, group: "hair" },
+      { name: "hair2", parent: "hair1", x: hair2.x, y: hair2.y, z: hair2.z, radius: 0.13, maxAng: 0.75, group: "hair" },
+      { name: "hair3", parent: "hair2", x: hair3.x, y: hair3.y, z: hair3.z, radius: 0.13, maxAng: 0.9, group: "hair" },
+      { name: "hair4", parent: "hair3", x: hair4.x, y: hair4.y, z: hair4.z, radius: 0.13, maxAng: 1.0, group: "hair" },
+      { name: "hair5", parent: "hair4", x: hair5.x, y: hair5.y, z: hair5.z, radius: 0.12, maxAng: 1.1, group: "hair" },
+      { name: "belly", parent: "spine1", x: navel.x, y: navel.y, z: navel.z - 0.05, radius: 0.14, maxAng: 0.25, group: "body" },
+      { name: "lClav", parent: "spine3", x: lClav.x, y: lClav.y, z: lClav.z, radius: 0.08, maxAng: 0.55, group: "body" },
+      { name: "lUpper", parent: "lClav", x: lUpper.x, y: lUpper.y, z: lUpper.z, radius: 0.1, maxAng: 1.2, group: "body" },
+      { name: "lFore", parent: "lUpper", x: lFore.x, y: lFore.y, z: lFore.z, radius: 0.08, maxAng: 1.3, group: "body" },
+      { name: "lHand", parent: "lFore", x: lHand.x, y: lHand.y, z: lHand.z, radius: 0.06, maxAng: 0.8, group: "body" },
+      { name: "rClav", parent: "spine3", x: rClav.x, y: rClav.y, z: rClav.z, radius: 0.08, maxAng: 0.55, group: "body" },
+      { name: "rUpper", parent: "rClav", x: rUpper.x, y: rUpper.y, z: rUpper.z, radius: 0.1, maxAng: 1.2, group: "body" },
+      { name: "rFore", parent: "rUpper", x: rFore.x, y: rFore.y, z: rFore.z, radius: 0.08, maxAng: 1.3, group: "body" },
+      { name: "rHand", parent: "rFore", x: rHand.x, y: rHand.y, z: rHand.z, radius: 0.06, maxAng: 0.8, group: "body" },
+      { name: "lThigh", parent: "hips", x: lThigh.x, y: lThigh.y, z: lThigh.z, radius: 0.12, maxAng: 0.9, group: "body" },
+      { name: "lShin", parent: "lThigh", x: lShin.x, y: lShin.y, z: lShin.z, radius: 0.1, maxAng: 1.0, group: "body" },
+      { name: "lAnkle", parent: "lShin", x: lAnkle.x, y: lAnkle.y, z: lAnkle.z, radius: 0.08, maxAng: 0.8, group: "foot" },
+      { name: "lFoot", parent: "lAnkle", x: lFoot.x, y: lFoot.y, z: lFoot.z, radius: 0.08, maxAng: 0.6, group: "foot" },
+      { name: "lToe", parent: "lFoot", x: lToe.x, y: lToe.y, z: lToe.z, radius: 0.06, maxAng: 0.45, group: "foot" },
+      { name: "rThigh", parent: "hips", x: rThigh.x, y: rThigh.y, z: rThigh.z, radius: 0.12, maxAng: 0.9, group: "body" },
+      { name: "rShin", parent: "rThigh", x: rShin.x, y: rShin.y, z: rShin.z, radius: 0.1, maxAng: 1.0, group: "body" },
+      { name: "rAnkle", parent: "rShin", x: rAnkle.x, y: rAnkle.y, z: rAnkle.z, radius: 0.08, maxAng: 0.8, group: "foot" },
+      { name: "rFoot", parent: "rAnkle", x: rFoot.x, y: rFoot.y, z: rFoot.z, radius: 0.08, maxAng: 0.6, group: "foot" },
+      { name: "rToe", parent: "rFoot", x: rToe.x, y: rToe.y, z: rToe.z, radius: 0.06, maxAng: 0.45, group: "foot" },
     ];
 
     this.count = defs.length;
@@ -174,7 +215,6 @@ export class SoftSkeleton {
     this.rest = new Float32Array(this.count * 3);
     this.radius = new Float32Array(this.count);
     this.maxAng = new Float32Array(this.count);
-    this.slide = new Float32Array(this.count);
 
     defs.forEach((d, i) => {
       this.byName[d.name] = i;
@@ -189,15 +229,12 @@ export class SoftSkeleton {
       this.rest[i * 3 + 2] = b.z;
       this.radius[i] = b.radius;
       this.maxAng[i] = b.maxAng;
-      this.slide[i] = b.slide;
       this.q.push(new THREE.Quaternion());
       this.qv.push(new THREE.Vector3());
       this.off.push(new THREE.Vector3());
-      this.ov.push(new THREE.Vector3());
       this.wpos.push(new THREE.Vector3(b.x, b.y, b.z));
       this.wrot.push(new THREE.Quaternion());
       this.poseQ.push(new THREE.Quaternion());
-      this.poseOff.push(new THREE.Vector3());
       this.exprQ.push(new THREE.Quaternion());
       this.exprOff.push(new THREE.Vector3());
     }
@@ -210,10 +247,14 @@ export class SoftSkeleton {
     const weight = new Float32Array(n * 4);
     const rest = new Float32Array(positions);
     const colors = new Float32Array(n * 3);
+    const softness = new Float32Array(n);
+    const delta = new Float32Array(n * 3);
+    const dprev = new Float32Array(n * 3);
     const scores = new Float32Array(this.count);
     const allow = this.allowedBones(hint);
     const hy = this.headY;
     const by = this.bustY;
+    const ny = this.navelY;
 
     for (let i = 0; i < n; i++) {
       const x = positions[i * 3]!;
@@ -230,55 +271,41 @@ export class SoftSkeleton {
           p < 0
             ? Math.hypot(x - bx, y - byy, z - bz)
             : distToSeg(x, y, z, this.rest[p * 3]!, this.rest[p * 3 + 1]!, this.rest[p * 3 + 2]!, bx, byy, bz);
-        let s = Math.exp(-((d / this.radius[b]!) * (d / this.radius[b]!)));
-        const g = this.group[b];
-        const nm = this.names[b];
-        if (hint === "face") {
-          if (y > hy + 0.012 && /brow/.test(nm)) s *= 6;
-          if (y > hy - 0.01 && y < hy + 0.02 && /eye/.test(nm)) s *= 8;
-          if (y < hy - 0.02 && /jaw|mouth|cheek/.test(nm)) s *= 5;
-          if (z < 0 && g === "face") s *= 0.15;
-        } else if (hint === "mouth") {
-          if (/jaw|mouth|tongue/.test(nm)) s *= 4;
-        } else if (hint === "eye") {
-          if (x < 0 && nm === "eyeL") s *= 8;
-          if (x > 0 && nm === "eyeR") s *= 8;
-        } else if (hint === "hair") {
-          if (g !== "hair" && y < hy - 0.05) s *= 0.08;
-        } else if (hint === "legs") {
-          if (y < 0.16 && g === "foot") s *= 10;
-          if (y < 0.28 && /Ankle|Shin/.test(nm)) s *= 3;
-          if (y > 0.22 && g === "foot") s *= 0.2;
-        } else if (hint === "dress") {
-          if (g === "breast" && Math.abs(y - by) < 0.1 && z > 0.03 && Math.abs(x) > 0.025) s *= 9;
-          if (g === "breast" && (z < 0.01 || Math.abs(y - by) > 0.12)) s *= 0.05;
-        }
-        scores[b] = s;
+        scores[b] = smoother(d, this.radius[b]! * 1.35);
       }
       const bi = [0, 0, 0, 0];
       const bw = [-1, -1, -1, -1];
       for (let b = 0; b < this.count; b++) {
         const s = scores[b]!;
         if (s > bw[0]!) {
-          bw[3] = bw[2]; bi[3] = bi[2];
-          bw[2] = bw[1]; bi[2] = bi[1];
-          bw[1] = bw[0]; bi[1] = bi[0];
-          bw[0] = s; bi[0] = b;
+          bw[3] = bw[2];
+          bi[3] = bi[2];
+          bw[2] = bw[1];
+          bi[2] = bi[1];
+          bw[1] = bw[0];
+          bi[1] = bi[0];
+          bw[0] = s;
+          bi[0] = b;
         } else if (s > bw[1]!) {
-          bw[3] = bw[2]; bi[3] = bi[2];
-          bw[2] = bw[1]; bi[2] = bi[1];
-          bw[1] = s; bi[1] = b;
+          bw[3] = bw[2];
+          bi[3] = bi[2];
+          bw[2] = bw[1];
+          bi[2] = bi[1];
+          bw[1] = s;
+          bi[1] = b;
         } else if (s > bw[2]!) {
-          bw[3] = bw[2]; bi[3] = bi[2];
-          bw[2] = s; bi[2] = b;
+          bw[3] = bw[2];
+          bi[3] = bi[2];
+          bw[2] = s;
+          bi[2] = b;
         } else if (s > bw[3]!) {
-          bw[3] = s; bi[3] = b;
+          bw[3] = s;
+          bi[3] = b;
         }
       }
       let sum = bw[0]! + bw[1]! + bw[2]! + bw[3]!;
       if (sum < 1e-6) {
-        const fallback = allow[0] ?? 0;
-        bi[0] = fallback;
+        bi[0] = allow[0] ?? 0;
         bw[0] = 1;
         bw[1] = 0;
         bw[2] = 0;
@@ -298,9 +325,23 @@ export class SoftSkeleton {
       colors[i * 3] = _c.r;
       colors[i * 3 + 1] = _c.g;
       colors[i * 3 + 2] = _c.b;
+
+      const front = THREE.MathUtils.clamp((z + 0.02) / 0.12, 0, 1);
+      const belly =
+        smoother(Math.abs(y - ny), 0.11) * smoother(Math.abs(x), 0.13) * front;
+      const chest =
+        smoother(Math.abs(y - by), 0.09) * smoother(Math.abs(Math.abs(x) - 0.07), 0.08) * front;
+      const cheek = hint === "face" || hint === "mouth" ? smoother(Math.abs(y - (hy - 0.03)), 0.04) : 0;
+      let soft = 0.12;
+      if (hint === "dress") soft = 0.22 + belly * 0.7 + chest * 0.78;
+      else if (hint === "organs") soft = 0.82;
+      else if (hint === "hair") soft = 0.45;
+      else if (hint === "legs") soft = y < 0.2 ? 0.2 : 0.35;
+      else if (hint === "face" || hint === "mouth" || hint === "eye") soft = 0.2 + cheek * 0.4;
+      softness[i] = Math.min(1, soft);
     }
 
-    const binding: SkinBinding = { positions, rest, count: n, index, weight, colors };
+    const binding: SkinBinding = { positions, rest, count: n, index, weight, colors, softness, delta, dprev };
     this.bindings.push(binding);
     return binding;
   }
@@ -316,7 +357,7 @@ export class SoftSkeleton {
       else if (hint === "mouth") ok = /jaw|mouth|tongue|head/.test(nm);
       else if (hint === "face") ok = g === "face" || nm === "head" || nm === "neck";
       else if (hint === "legs") ok = g === "foot" || /hips|Thigh|Shin/.test(nm);
-      else if (hint === "dress") ok = g === "body" || g === "breast";
+      else if (hint === "dress") ok = g === "body";
       else if (hint === "organs") ok = /belly|spine/.test(nm);
       else ok = g !== "hair" && g !== "face";
       if (ok) out.push(i);
@@ -341,8 +382,7 @@ export class SoftSkeleton {
           ? Math.hypot(x - bx, y - by, z - bz)
           : distToSeg(x, y, z, this.rest[p * 3]!, this.rest[p * 3 + 1]!, this.rest[p * 3 + 2]!, bx, by, bz);
       let s = d / this.radius[b]!;
-      if (y < 0.2 && g === "foot") s *= 0.35;
-      if (this.group[b] === "breast" && Math.abs(y - this.bustY) < 0.1) s *= 0.45;
+      if (y < 0.2 && g === "foot") s *= 0.4;
       if (s < bestS) {
         bestS = s;
         best = b;
@@ -351,16 +391,20 @@ export class SoftSkeleton {
     return best;
   }
 
-  setDrag(bone: number, gx: number, gy: number, gz: number, tx: number, ty: number, tz: number) {
-    this.hold = { mode: "drag", bone, gx, gy, gz, tx, ty, tz };
+  setPoseDrag(bone: number, gx: number, gy: number, gz: number, tx: number, ty: number, tz: number) {
+    this.hold = { kind: "pose", bone, gx, gy, gz, tx, ty, tz };
   }
 
-  setPress(bone: number, nx: number, ny: number, nz: number, depth: number) {
-    this.hold = { mode: "press", bone, nx, ny, nz, depth };
+  setTissueDrag(gx: number, gy: number, gz: number, tx: number, ty: number, tz: number, radius = 0.14) {
+    this.hold = { kind: "tissue", gx, gy, gz, tx, ty, tz, radius };
   }
 
   clearHold() {
     this.hold = null;
+  }
+
+  commitPose() {
+    for (let i = 0; i < this.count; i++) this.poseQ[i]!.copy(this.q[i]!);
   }
 
   setExpression(id: ExpressionId) {
@@ -393,23 +437,17 @@ export class SoftSkeleton {
       set("mouthR", 0, 0, 0, 0.01, -0.004, 0.006);
       set("eyeL", -0.18, 0, 0, 0, 0.004, 0.006);
       set("eyeR", -0.18, 0, 0, 0, 0.004, 0.006);
-      set("tongue", 0.12, 0, 0, 0, -0.004, 0.008);
     } else if (id === "open") {
       set("jaw", 0.72, 0, 0, 0, -0.02, 0.012);
       set("mouthL", 0.14, 0, -0.12, -0.008, -0.006, 0.006);
       set("mouthR", 0.14, 0, 0.12, 0.008, -0.006, 0.006);
-      set("cheekL", 0, 0, 0, -0.005, -0.003, 0);
-      set("cheekR", 0, 0, 0, 0.005, -0.003, 0);
       set("tongue", 0.2, 0, 0, 0, -0.008, 0.01);
     }
   }
 
   setPose(id: PoseId) {
     this.pose = id;
-    for (let i = 0; i < this.count; i++) {
-      this.poseQ[i]!.identity();
-      this.poseOff[i]!.set(0, 0, 0);
-    }
+    for (let i = 0; i < this.count; i++) this.poseQ[i]!.identity();
     const set = (name: string, ex: number, ey: number, ez: number) => {
       const i = this.byName[name];
       if (i === undefined) return;
@@ -459,7 +497,11 @@ export class SoftSkeleton {
       this.q[i]!.identity();
       this.qv[i]!.set(0, 0, 0);
       this.off[i]!.set(0, 0, 0);
-      this.ov[i]!.set(0, 0, 0);
+      this.poseQ[i]!.identity();
+    }
+    for (const b of this.bindings) {
+      b.delta.fill(0);
+      b.dprev.fill(0);
     }
     this.hold = null;
     this.setPose(this.pose);
@@ -469,116 +511,66 @@ export class SoftSkeleton {
   }
 
   shake(strength = 0.08) {
-    for (let i = 1; i < this.count; i++) {
-      const g = this.group[i];
-      const k = g === "breast" ? 18 : g === "hair" ? 10 : 6;
-      this.qv[i]!.x += (Math.random() - 0.5) * strength * k;
-      this.qv[i]!.y += (Math.random() - 0.5) * strength * k * 0.6;
-      this.qv[i]!.z += (Math.random() - 0.5) * strength * k;
-      if (g === "breast") {
-        this.ov[i]!.x += (Math.random() - 0.5) * strength * 0.4;
-        this.ov[i]!.z += (Math.random() - 0.5) * strength * 0.5;
+    for (const b of this.bindings) {
+      for (let i = 0; i < b.count; i++) {
+        const s = b.softness[i]! * strength;
+        if (s < 0.002) continue;
+        b.dprev[i * 3]! += (Math.random() - 0.5) * s * 0.8;
+        b.dprev[i * 3 + 1]! += (Math.random() - 0.5) * s * 0.5;
+        b.dprev[i * 3 + 2]! += (Math.random() - 0.5) * s;
       }
     }
   }
 
   step(dt: number, params: SkelParams) {
     const d = Math.min(dt, 0.04);
-    this.applyHold();
-    const held = this.hold?.bone ?? -1;
-    const heldParent = held >= 0 ? this.parent[held] : -1;
-    const stiff = 10 + params.stiffness * 22;
-    const damp = 5 + params.damping * 8;
-    const jiggle = 0.35 + params.jiggle * 0.9;
-    const breath = params.breathing ? Math.sin(params.time * 1.65) * 0.01 : 0;
-    const wind = params.wind * Math.sin(params.time * 1.4) * 0.04;
-    const posed = this.pose !== "idle";
-    const faced = this.expression !== "rest";
-    const spine3 = this.byName.spine3 ?? -1;
+    this.applyHoldPose();
+    const heldBone = this.hold?.kind === "pose" ? this.hold.bone : -1;
+    const heldParent = heldBone >= 0 ? this.parent[heldBone] : -1;
+    const stiff = 14 + params.stiffness * 18;
+    const damp = 6 + params.damping * 7;
+    const jiggle = 0.4 + params.jiggle * 0.85;
 
     for (let i = 0; i < this.count; i++) {
       const g = this.group[i];
-      const locked = i === held || i === heldParent;
+      const locked = i === heldBone || i === heldParent;
       const q = this.q[i]!;
       const qv = this.qv[i]!;
-      const off = this.off[i]!;
-      const ov = this.ov[i]!;
-      const isBreast = g === "breast";
       const isFace = g === "face";
-      const isHair = g === "hair";
-      const k = isBreast ? stiff * 0.16 : isHair ? stiff * 0.38 : isFace ? stiff * 1.6 : stiff;
-      const j = isBreast ? jiggle * 2.1 : isHair ? jiggle * 1.4 : jiggle;
-
+      const targetQ = isFace && this.expression !== "rest" ? this.exprQ[i]! : this.poseQ[i]!;
       if (!locked) {
-        const targetQ = isFace && faced ? this.exprQ[i]! : posed && g === "body" ? this.poseQ[i]! : IDENTITY;
         _q.copy(q).invert().multiply(targetQ);
         const ang = 2 * Math.acos(Math.min(1, Math.abs(_q.w)));
         if (ang > 1e-5) {
           const s = Math.sqrt(1 - _q.w * _q.w) || 1e-6;
           const sign = _q.w < 0 ? -1 : 1;
+          const k = isFace ? stiff * 1.5 : stiff;
           qv.x += sign * (_q.x / s) * ang * k * d;
           qv.y += sign * (_q.y / s) * ang * k * d;
           qv.z += sign * (_q.z / s) * ang * k * d;
         }
-        const tOff = isFace && faced ? this.exprOff[i]! : this.poseOff[i]!;
-        ov.x += (tOff.x - off.x) * k * 1.1 * d;
-        ov.y += (tOff.y - off.y) * k * 1.1 * d;
-        ov.z += (tOff.z - off.z) * k * 1.1 * d;
-        if (isBreast) {
-          ov.y += params.gravity * 0.028 * d;
-          if (spine3 >= 0) {
-            ov.x += this.qv[spine3]!.y * 0.045;
-            ov.z += this.qv[spine3]!.x * 0.04;
-            ov.y += this.qv[spine3]!.x * 0.02;
-          }
-        }
-        if (isHair) ov.x += wind * 0.4;
       }
-
-      qv.multiplyScalar(Math.exp(-(isBreast ? damp * 0.45 : damp) * d));
-      ov.multiplyScalar(Math.exp(-(isBreast ? damp * 0.4 : damp) * d));
-
-      const spin = qv.length() * d * j;
+      qv.multiplyScalar(Math.exp(-damp * d));
+      const spin = qv.length() * d * (g === "hair" ? jiggle * 1.3 : 0.55);
       if (spin > 1e-8) {
         _axis.copy(qv).normalize();
         _q.setFromAxisAngle(_axis, spin);
         q.premultiply(_q);
         q.normalize();
       }
-      off.x += ov.x * d * j;
-      off.y += ov.y * d * j;
-      off.z += ov.z * d * j;
-
       const maxA = this.maxAng[i]!;
       const aNow = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
       if (aNow > maxA && aNow > 1e-5) q.slerp(IDENTITY, 1 - maxA / aNow);
-      const sl = this.slide[i]!;
-      const olen = off.length();
-      if (olen > sl && sl > 0) off.multiplyScalar(sl / olen);
-      else if (sl === 0 && !isFace) off.set(0, 0, 0);
     }
-
-    const belly = this.byName.belly;
-    const spine2 = this.byName.spine2;
-    if (belly !== undefined && !this.hold) {
-      this.off[belly]!.z += (breath * 1.1 - this.off[belly]!.z) * 0.15;
-    }
-    if (spine2 !== undefined && !this.hold && this.pose === "idle") {
-      _q.setFromAxisAngle(_axis.set(1, 0, 0), breath * 0.25 + wind);
-      this.q[spine2]!.slerp(_q, 0.08);
-    }
-    const lb = this.byName.lBreast;
-    const rb = this.byName.rBreast;
-    if (lb !== undefined && !this.hold) this.off[lb]!.z += breath * 0.35;
-    if (rb !== undefined && !this.hold) this.off[rb]!.z += breath * 0.35;
 
     this.updateFK();
+    this.stepTissue(d, params);
     this.applyAll();
 
     let e = 0;
     for (let i = 0; i < this.count; i++) {
       const a = 2 * Math.acos(Math.min(1, Math.abs(this.q[i]!.w)));
-      e += a * a + this.off[i]!.lengthSq();
+      e += a * a;
     }
     this.energy = e;
   }
@@ -614,24 +606,9 @@ export class SoftSkeleton {
     return out;
   }
 
-  private applyHold() {
+  private applyHoldPose() {
     const h = this.hold;
-    if (!h) return;
-    if (h.mode === "press") {
-      const belly = this.byName.belly ?? h.bone;
-      const spine1 = this.byName.spine1;
-      this.off[belly]!.set(-h.nx * h.depth, -h.ny * h.depth * 0.35, -h.nz * h.depth);
-      if (spine1 !== undefined) {
-        _axis.set(1, 0, 0);
-        this.q[spine1]!.slerp(_q.setFromAxisAngle(_axis, h.depth * 1.6), 0.45);
-      }
-      const g = this.group[h.bone];
-      if (g === "breast") {
-        this.off[h.bone]!.set(-h.nx * h.depth * 1.2, -h.ny * h.depth * 0.5, -h.nz * h.depth * 1.2);
-      }
-      return;
-    }
-
+    if (!h || h.kind !== "pose") return;
     let b = h.bone;
     const maxChain = this.group[h.bone] === "foot" ? 4 : 3;
     for (let chain = 0; chain < maxChain && b >= 0; chain++) {
@@ -648,34 +625,97 @@ export class SoftSkeleton {
       _from.normalize();
       _to.normalize();
       _q.setFromUnitVectors(_from, _to);
-      const influence = chain === 0 ? 0.72 : chain === 1 ? 0.38 : 0.16;
+      const influence = chain === 0 ? 0.78 : chain === 1 ? 0.4 : 0.16;
       this.q[b]!.slerp(_q, influence);
       const ang = 2 * Math.acos(Math.min(1, Math.abs(this.q[b]!.w)));
       if (ang > this.maxAng[b]!) this.q[b]!.slerp(IDENTITY, 1 - this.maxAng[b]! / ang);
-      if (this.slide[b]! > 0 && chain === 0) {
-        const pull = _v.set(h.tx - h.gx, h.ty - h.gy, h.tz - h.gz);
-        const sl = this.slide[b]!;
-        if (pull.length() > sl) pull.setLength(sl);
-        this.off[b]!.lerp(pull, 0.4);
-      }
       b = this.parent[b]!;
+    }
+  }
+
+  private stepTissue(d: number, params: SkelParams) {
+    const breath = params.breathing ? Math.sin(params.time * 1.55) * 0.011 : 0;
+    const grab = this.hold?.kind === "tissue" ? this.hold : null;
+    const k = 18 + params.stiffness * 26;
+    const damp = Math.exp(-(4 + params.damping * 6) * d);
+    const g = params.gravity * 0.0009;
+    const ny = this.navelY;
+    const by = this.bustY;
+
+    for (const bind of this.bindings) {
+      const { count, rest, softness, delta, dprev } = bind;
+      for (let i = 0; i < count; i++) {
+        const s = softness[i]!;
+        if (s < 0.02) {
+          delta[i * 3] = 0;
+          delta[i * 3 + 1] = 0;
+          delta[i * 3 + 2] = 0;
+          continue;
+        }
+        const i3 = i * 3;
+        const x = rest[i3]!;
+        const y = rest[i3 + 1]!;
+        const z = rest[i3 + 2]!;
+        let tx = 0;
+        let ty = 0;
+        let tz = 0;
+        const belly = smoother(Math.abs(y - ny), 0.12) * smoother(Math.abs(x), 0.14);
+        const chest = smoother(Math.abs(y - by), 0.1) * smoother(Math.abs(Math.abs(x) - 0.07), 0.09);
+        const front = THREE.MathUtils.clamp((z + 0.01) / 0.11, 0, 1);
+        tz += breath * (0.55 * belly + 0.4 * chest) * front;
+        ty += breath * 0.15 * chest * front;
+        if (grab) {
+          const dx = x - grab.gx;
+          const dy = y - grab.gy;
+          const dz = z - grab.gz;
+          const w = s * Math.exp(-(dx * dx + dy * dy + dz * dz) / (grab.radius * grab.radius));
+          tx += (grab.tx - grab.gx) * w;
+          ty += (grab.ty - grab.gy) * w;
+          tz += (grab.tz - grab.gz) * w;
+        }
+        let vx = (delta[i3]! - dprev[i3]!) * damp;
+        let vy = (delta[i3 + 1]! - dprev[i3 + 1]!) * damp;
+        let vz = (delta[i3 + 2]! - dprev[i3 + 2]!) * damp;
+        const chestMass = 0.35 + chest * 0.9;
+        vy += g * s * chestMass;
+        vx += (tx - delta[i3]!) * k * d * (0.55 + (1 - chest) * 0.45);
+        vy += (ty - delta[i3 + 1]!) * k * d * (0.55 + (1 - chest) * 0.45);
+        vz += (tz - delta[i3 + 2]!) * k * d * (0.55 + (1 - chest) * 0.45);
+        dprev[i3] = delta[i3]!;
+        dprev[i3 + 1] = delta[i3 + 1]!;
+        dprev[i3 + 2] = delta[i3 + 2]!;
+        delta[i3] = delta[i3]! + vx;
+        delta[i3 + 1] = delta[i3 + 1]! + vy;
+        delta[i3 + 2] = delta[i3 + 2]! + vz;
+        const lim = 0.055 + s * 0.05;
+        const len = Math.hypot(delta[i3]!, delta[i3 + 1]!, delta[i3 + 2]!);
+        if (len > lim) {
+          const m = lim / len;
+          delta[i3]! *= m;
+          delta[i3 + 1]! *= m;
+          delta[i3 + 2]! *= m;
+        }
+      }
     }
   }
 
   private updateFK() {
     for (let i = 0; i < this.count; i++) {
       const p = this.parent[i];
+      const ox = this.exprOff[i]!.x;
+      const oy = this.exprOff[i]!.y;
+      const oz = this.exprOff[i]!.z;
       if (p < 0) {
         this.wrot[i]!.copy(this.q[i]!);
-        this.wpos[i]!.set(this.rest[i * 3]!, this.rest[i * 3 + 1]!, this.rest[i * 3 + 2]!).add(this.off[i]!);
+        this.wpos[i]!.set(this.rest[i * 3]! + ox, this.rest[i * 3 + 1]! + oy, this.rest[i * 3 + 2]! + oz);
         continue;
       }
       this.wrot[i]!.copy(this.wrot[p]!).multiply(this.q[i]!);
       _v.set(
-        this.rest[i * 3]! - this.rest[p * 3]!,
-        this.rest[i * 3 + 1]! - this.rest[p * 3 + 1]!,
-        this.rest[i * 3 + 2]! - this.rest[p * 3 + 2]!,
-      ).add(this.off[i]!);
+        this.rest[i * 3]! - this.rest[p * 3]! + ox,
+        this.rest[i * 3 + 1]! - this.rest[p * 3 + 1]! + oy,
+        this.rest[i * 3 + 2]! - this.rest[p * 3 + 2]! + oz,
+      );
       _v.applyQuaternion(this.wrot[p]!);
       this.wpos[i]!.copy(this.wpos[p]!).add(_v);
     }
@@ -686,7 +726,7 @@ export class SoftSkeleton {
   }
 
   apply(binding: SkinBinding) {
-    const { positions, rest, count, index, weight } = binding;
+    const { positions, rest, count, index, weight, delta } = binding;
     for (let i = 0; i < count; i++) {
       const i3 = i * 3;
       const rx = rest[i3]!;
@@ -707,9 +747,9 @@ export class SoftSkeleton {
         oy += _v.y * w;
         oz += _v.z * w;
       }
-      positions[i3] = ox;
-      positions[i3 + 1] = oy;
-      positions[i3 + 2] = oz;
+      positions[i3] = ox + delta[i3]!;
+      positions[i3 + 1] = oy + delta[i3 + 1]!;
+      positions[i3 + 2] = oz + delta[i3 + 2]!;
     }
   }
 }

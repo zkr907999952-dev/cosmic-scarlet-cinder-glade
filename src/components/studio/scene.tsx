@@ -31,6 +31,7 @@ export default function Scene({
           toneMappingExposure: 1.05,
           alpha: false,
           powerPreference: "high-performance",
+          preserveDrawingBuffer: true,
         }}
         onCreated={({ scene, gl }) => {
           scene.background = new THREE.Color("#0b0b0c");

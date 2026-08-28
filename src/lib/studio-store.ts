@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { ExpressionId, PoseId } from "@/lib/softbody/soft-skeleton";
 
 export type PresetId = "soft" | "firm" | "jelly" | "athletic";
-export type InteractMode = "press" | "drag";
+export type InteractMode = "drag" | "pose";
 
 export type StudioParams = {
   stiffness: number;
@@ -128,7 +128,7 @@ type StudioState = StudioParams & {
 export const useStudio = create<StudioState>((set) => ({
   ...PRESETS.soft,
   preset: "soft",
-  interactMode: "press",
+  interactMode: "drag",
   expression: "rest",
   pose: "idle",
   energy: 0,
