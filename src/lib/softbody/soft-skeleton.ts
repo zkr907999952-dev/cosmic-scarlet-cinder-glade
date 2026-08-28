@@ -715,38 +715,40 @@ export class SoftSkeleton {
   }
 
   private stepBreasts(d: number, params: SkelParams) {
-    const follow = 1 - Math.exp(-8 * d);
+    const follow = 1 - Math.exp(-10 * d);
     const prevYaw = this.yawF;
     const prevPitch = this.pitchF;
     this.yawF += (this.yawVel - this.yawF) * follow;
     this.pitchF += (this.pitchVel - this.pitchF) * follow;
-    const accY = THREE.MathUtils.clamp((this.yawF - prevYaw) / Math.max(d, 1e-4), -22, 22);
-    const accP = THREE.MathUtils.clamp((this.pitchF - prevPitch) / Math.max(d, 1e-4), -16, 16);
-    const omega = 9.2;
-    const zeta = 0.4;
+    const accY = THREE.MathUtils.clamp((this.yawF - prevYaw) / Math.max(d, 1e-4), -28, 28);
+    const accP = THREE.MathUtils.clamp((this.pitchF - prevPitch) / Math.max(d, 1e-4), -20, 20);
+    const omega = 8.2;
+    const zeta = 0.28;
     const stiff = omega * omega;
     const damp = 2 * zeta * omega;
-    const drive = 0.0095 * (0.5 + params.jiggle * 0.75);
+    const j = 0.55 + params.jiggle * 0.8;
+    const driveA = 0.16 * j;
+    const driveV = 0.034 * j;
     const integrate = (m: { x: number; y: number; z: number; vx: number; vy: number; vz: number }) => {
-      const ax = -stiff * m.x - damp * m.vx - accY * drive;
-      const ay = -stiff * m.y - damp * m.vy + accP * drive * 0.55;
-      const az = -stiff * m.z - damp * m.vz + Math.abs(accY) * drive * 0.12;
+      const ax = -stiff * m.x - damp * m.vx - accY * driveA - this.yawF * driveV;
+      const ay = -stiff * m.y - damp * m.vy + accP * driveA * 0.55 + this.pitchF * driveV * 0.35;
+      const az = -stiff * m.z - damp * m.vz + Math.abs(accY) * driveA * 0.18 + Math.abs(this.yawF) * driveV * 0.12;
       m.vx += ax * d;
       m.vy += ay * d;
       m.vz += az * d;
       m.x += m.vx * d;
       m.y += m.vy * d;
       m.z += m.vz * d;
-      const lim = 0.024;
+      const lim = 0.038;
       const len = Math.hypot(m.x, m.y, m.z);
       if (len > lim) {
         const s = lim / len;
         m.x *= s;
         m.y *= s;
         m.z *= s;
-        m.vx *= 0.72;
-        m.vy *= 0.72;
-        m.vz *= 0.72;
+        m.vx *= 0.7;
+        m.vy *= 0.7;
+        m.vz *= 0.7;
       }
     };
     integrate(this.brL);
@@ -805,9 +807,9 @@ export class SoftSkeleton {
       positions[i3 + 1] = oy + delta[i3 + 1]!;
       positions[i3 + 2] = oz + delta[i3 + 2]!;
       const chest =
-        smoother(Math.abs(ry - this.bustY), 0.1) *
-        smoother(Math.abs(Math.abs(rx) - 0.07), 0.09) *
-        THREE.MathUtils.clamp((rz + 0.01) / 0.11, 0, 1);
+        smoother(Math.abs(ry - this.bustY), 0.13) *
+        smoother(Math.abs(Math.abs(rx) - 0.075), 0.11) *
+        THREE.MathUtils.clamp((rz + 0.02) / 0.12, 0, 1);
       if (chest > 0.04) {
         const br = rx < 0 ? this.brL : this.brR;
         positions[i3] += br.x * chest;

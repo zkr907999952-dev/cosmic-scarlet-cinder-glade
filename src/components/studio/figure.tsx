@@ -251,7 +251,7 @@ function hideInternalBits(root: THREE.Object3D) {
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh) return;
-    if (/corpsetracines|materialcorps/.test(meshKey(mesh))) {
+    if (/vulve|clitoris|corpsetracines|materialcorps|materialbulbes/.test(meshKey(mesh))) {
       mesh.visible = false;
     }
   });
@@ -603,8 +603,8 @@ function shapeGutToProfile(group: THREE.Object3D, cavity: THREE.Box3, navel: THR
       const lim = targetHalf * 1.06;
       const ax = Math.abs(x - cx);
       if (ax > lim) x = cx + Math.sign(x - cx) * (lim + (ax - lim) * 0.2);
-      const zFront = Math.min(cavity.max.z, p.zFront - 0.028);
-      const zBack = Math.max(cavity.min.z, p.zFront - 0.09);
+      const zFront = Math.min(cavity.max.z, p.zFront - 0.01);
+      const zBack = Math.max(cavity.min.z, p.zFront - 0.102);
       const gz0 = sampleAt(gutZ0, t);
       const gz1 = Math.max(gz0 + 1e-4, sampleAt(gutZ1, t));
       const zt = THREE.MathUtils.clamp((z - gz0) / (gz1 - gz0), 0, 1);
@@ -669,6 +669,35 @@ function scaleNamedMeshes(root: THREE.Object3D, re: RegExp, factor: number) {
   });
 }
 
+function retractVagina(root: THREE.Object3D, zLimit: number) {
+  const uterus = collectNamedBox(root, /uterus/);
+  const ucy = uterus ? (uterus.min.y + uterus.max.y) * 0.5 : 0.93;
+  const ucz = uterus ? (uterus.min.z + uterus.max.z) * 0.5 : zLimit - 0.02;
+  const yMin = uterus ? uterus.min.y - 0.012 : 0.9;
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    if (!/vagin/.test(meshKey(mesh))) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos || !(pos.array instanceof Float32Array)) return;
+    const arr = pos.array;
+    for (let i = 0; i < pos.count; i++) {
+      const i3 = i * 3;
+      let y = arr[i3 + 1]!;
+      let z = arr[i3 + 2]!;
+      if (z > zLimit) z = zLimit - (z - zLimit) * 0.08;
+      if (z > ucz + 0.02) z = ucz + 0.02 + (z - ucz - 0.02) * 0.22;
+      if (y < yMin) y = yMin + (y - yMin) * 0.15;
+      if (y < ucy - 0.04) y = ucy - 0.04 + (y - (ucy - 0.04)) * 0.35;
+      arr[i3 + 1] = y;
+      arr[i3 + 2] = z;
+    }
+    pos.needsUpdate = true;
+    mesh.geometry.computeBoundingBox();
+    mesh.geometry.computeBoundingSphere();
+  });
+}
+
 function placePelvisPack(source: THREE.Object3D, crotch: THREE.Vector3, navel: THREE.Vector3, frontZ: number) {
   const root = cloneGraph(source);
   hideInternalBits(root);
@@ -687,29 +716,15 @@ function placePelvisPack(source: THREE.Object3D, crotch: THREE.Vector3, navel: T
   scaleNamedMeshes(baked, /vessie|bladder/, 0.7);
   bakeIntoVertices(baked);
 
-  const vulva = collectNamedBox(baked, /vulve|clitoris/);
-  if (vulva && !vulva.isEmpty()) {
-    const vx = (vulva.min.x + vulva.max.x) * 0.5;
-    const vy = vulva.min.y + (vulva.max.y - vulva.min.y) * 0.22;
-    const vz = vulva.max.z;
-    baked.position.x += crotch.x - vx;
-    baked.position.y += crotch.y - vy;
-    baked.position.z += crotch.z - 0.006 - vz;
-    bakeIntoVertices(baked);
-  } else {
-    const pb = new THREE.Box3().setFromObject(baked);
-    baked.position.x -= (pb.min.x + pb.max.x) * 0.5;
-    baked.position.z += frontZ - pb.max.z;
-    bakeIntoVertices(baked);
-  }
   const internals = /uterus|vessie|bladder|ovaire|trompe|ligament|vagin/;
   const ub = collectNamedBox(baked, /uterus/);
   if (ub) {
     const cz = (ub.min.z + ub.max.z) * 0.5;
     const dy = navel.y - 0.08 - ub.max.y;
-    const dz = crotch.z - 0.05 - cz;
+    const dz = navel.z - 0.07 - cz;
     shiftNamedMeshes(baked, internals, 0, dy, dz);
   }
+  retractVagina(baked, navel.z - 0.038);
   return baked;
 }
 
@@ -860,8 +875,8 @@ function FittedFigure({
     abdomen.min.x = acx - abx;
     abdomen.max.x = acx + abx;
     const skinZ = navel.z;
-    abdomen.max.z = skinZ - 0.022;
-    abdomen.min.z = skinZ - 0.092;
+    abdomen.max.z = skinZ - 0.01;
+    abdomen.min.z = skinZ - 0.105;
 
     const crotch = findCrotch(body, height);
     const pelvic = placePelvisPack(pelvis, crotch, navel, skinZ - 0.028);
@@ -1089,18 +1104,20 @@ function FittedFigure({
     }
 
     const ctrl = controlsRef.current;
-    if (ctrl) {
-      const az = ctrl.getAzimuthalAngle();
-      const pol = ctrl.getPolarAngle();
-      if (lastAz.current === null) {
-        lastAz.current = az;
-        lastPol.current = pol;
-      }
-      const invDt = 1 / Math.max(dt, 1e-4);
-      setup.skeleton.pushViewSpin((az - lastAz.current) * invDt, (pol - (lastPol.current ?? pol)) * invDt);
+    camera.getWorldDirection(_camDir);
+    const az = ctrl ? ctrl.getAzimuthalAngle() : Math.atan2(_camDir.x, _camDir.z);
+    const pol = ctrl ? ctrl.getPolarAngle() : Math.acos(THREE.MathUtils.clamp(_camDir.y, -1, 1));
+    if (lastAz.current === null) {
       lastAz.current = az;
       lastPol.current = pol;
     }
+    const invDt = 1 / Math.max(dt, 1e-4);
+    setup.skeleton.pushViewSpin(
+      THREE.MathUtils.clamp((az - lastAz.current) * invDt, -14, 14),
+      THREE.MathUtils.clamp((pol - (lastPol.current ?? pol)) * invDt, -10, 10),
+    );
+    lastAz.current = az;
+    lastPol.current = pol;
 
     if (grab.current?.active) {
       camera.getWorldDirection(_camDir);
