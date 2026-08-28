@@ -375,7 +375,7 @@ export function Overlay() {
         <span>{interactMode === "pose" ? "姿势" : "拖拽"}</span>
         <span className="text-border">/</span>
         <Activity className="size-3.5" />
-        <span>左键旋转 · 点身体操作 · T 拖拽/姿势 · X 透视 · K 骨骼 · W 绑定</span>
+        <span>右键旋转 · 左键点身体操作 · T 拖拽/姿势 · X 透视 · K 骨骼 · W 绑定</span>
       </div>
         </>
       )}

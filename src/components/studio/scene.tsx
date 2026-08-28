@@ -90,9 +90,9 @@ function ControlsBridge({
       maxPolarAngle={Math.PI * 0.86}
       target={[0, 0.98, 0.04]}
       mouseButtons={{
-        LEFT: THREE.MOUSE.ROTATE,
+        LEFT: -1 as unknown as THREE.MOUSE,
         MIDDLE: THREE.MOUSE.PAN,
-        RIGHT: THREE.MOUSE.PAN,
+        RIGHT: THREE.MOUSE.ROTATE,
       }}
       touches={{
         ONE: THREE.TOUCH.ROTATE,

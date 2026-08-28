@@ -124,8 +124,8 @@ export class SoftSkeleton {
   private pitchVel = 0;
   private yawF = 0;
   private pitchF = 0;
-  private readonly brL = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };
-  private readonly brR = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };
+  private readonly brL = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, sx: 0, sy: 0, sz: 0, svx: 0, svy: 0, svz: 0 };
+  private readonly brR = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, sx: 0, sy: 0, sz: 0, svx: 0, svy: 0, svz: 0 };
   private readonly bindings: SkinBinding[] = [];
   private readonly headY: number;
   private readonly bustY: number;
@@ -515,7 +515,9 @@ export class SoftSkeleton {
       b.dprev.fill(0);
     }
     this.brL.x = this.brL.y = this.brL.z = this.brL.vx = this.brL.vy = this.brL.vz = 0;
+    this.brL.sx = this.brL.sy = this.brL.sz = this.brL.svx = this.brL.svy = this.brL.svz = 0;
     this.brR.x = this.brR.y = this.brR.z = this.brR.vx = this.brR.vy = this.brR.vz = 0;
+    this.brR.sx = this.brR.sy = this.brR.sz = this.brR.svx = this.brR.svy = this.brR.svz = 0;
     this.yawF = this.pitchF = this.yawVel = this.pitchVel = 0;
     this.hold = null;
     this.setPose(this.pose);
@@ -715,44 +717,51 @@ export class SoftSkeleton {
   }
 
   private stepBreasts(d: number, params: SkelParams) {
-    const follow = 1 - Math.exp(-10 * d);
-    const prevYaw = this.yawF;
-    const prevPitch = this.pitchF;
+    const follow = 1 - Math.exp(-6 * d);
     this.yawF += (this.yawVel - this.yawF) * follow;
     this.pitchF += (this.pitchVel - this.pitchF) * follow;
-    const accY = THREE.MathUtils.clamp((this.yawF - prevYaw) / Math.max(d, 1e-4), -28, 28);
-    const accP = THREE.MathUtils.clamp((this.pitchF - prevPitch) / Math.max(d, 1e-4), -20, 20);
-    const omega = 8.2;
-    const zeta = 0.28;
-    const stiff = omega * omega;
-    const damp = 2 * zeta * omega;
-    const j = 0.55 + params.jiggle * 0.8;
-    const driveA = 0.16 * j;
-    const driveV = 0.034 * j;
-    const integrate = (m: { x: number; y: number; z: number; vx: number; vy: number; vz: number }) => {
-      const ax = -stiff * m.x - damp * m.vx - accY * driveA - this.yawF * driveV;
-      const ay = -stiff * m.y - damp * m.vy + accP * driveA * 0.55 + this.pitchF * driveV * 0.35;
-      const az = -stiff * m.z - damp * m.vz + Math.abs(accY) * driveA * 0.18 + Math.abs(this.yawF) * driveV * 0.12;
-      m.vx += ax * d;
-      m.vy += ay * d;
-      m.vz += az * d;
+    const j = 0.5 + params.jiggle * 0.7;
+    const tX = -this.yawF * 0.013 * j;
+    const tY = this.pitchF * 0.007 * j;
+    const tZ = Math.abs(this.yawF) * 0.0028 * j;
+    const w1 = 5.1;
+    const z1 = 0.62;
+    const k1 = w1 * w1;
+    const c1 = 2 * z1 * w1;
+    const w2 = 10.4;
+    const z2 = 0.32;
+    const k2 = w2 * w2;
+    const c2 = 2 * z2 * w2;
+    const lim = 0.042;
+    const step = (
+      m: {
+        x: number; y: number; z: number; vx: number; vy: number; vz: number;
+        sx: number; sy: number; sz: number; svx: number; svy: number; svz: number;
+      },
+      lag: number,
+    ) => {
+      m.vx += (-k1 * (m.x - tX * lag) - c1 * m.vx) * d;
+      m.vy += (-k1 * (m.y - tY * lag) - c1 * m.vy) * d;
+      m.vz += (-k1 * (m.z - tZ * lag) - c1 * m.vz) * d;
       m.x += m.vx * d;
       m.y += m.vy * d;
       m.z += m.vz * d;
-      const lim = 0.038;
-      const len = Math.hypot(m.x, m.y, m.z);
+      m.svx += (-k2 * (m.sx - m.x) - c2 * (m.svx - m.vx)) * d;
+      m.svy += (-k2 * (m.sy - m.y) - c2 * (m.svy - m.vy)) * d;
+      m.svz += (-k2 * (m.sz - m.z) - c2 * (m.svz - m.vz)) * d;
+      m.sx += m.svx * d;
+      m.sy += m.svy * d;
+      m.sz += m.svz * d;
+      const len = Math.hypot(m.sx, m.sy, m.sz);
       if (len > lim) {
         const s = lim / len;
-        m.x *= s;
-        m.y *= s;
-        m.z *= s;
-        m.vx *= 0.7;
-        m.vy *= 0.7;
-        m.vz *= 0.7;
+        m.sx *= s;
+        m.sy *= s;
+        m.sz *= s;
       }
     };
-    integrate(this.brL);
-    integrate(this.brR);
+    step(this.brL, 1);
+    step(this.brR, 1.08);
   }
 
   private updateFK() {
@@ -812,9 +821,11 @@ export class SoftSkeleton {
         THREE.MathUtils.clamp((rz + 0.02) / 0.12, 0, 1);
       if (chest > 0.04) {
         const br = rx < 0 ? this.brL : this.brR;
-        positions[i3] += br.x * chest;
-        positions[i3 + 1] += br.y * chest;
-        positions[i3 + 2] += br.z * chest;
+        const hang = THREE.MathUtils.clamp((this.bustY + 0.04 - ry) / 0.14, 0.15, 1);
+        const w = chest * (0.4 + 0.6 * hang);
+        positions[i3] += br.sx * w;
+        positions[i3 + 1] += br.sy * w;
+        positions[i3 + 2] += br.sz * w;
       }
     }
   }
