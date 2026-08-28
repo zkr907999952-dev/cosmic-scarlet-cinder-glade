@@ -882,13 +882,10 @@ function attachXray(mesh: THREE.Mesh, y0: number, y1: number, xMax: number, zFro
            float front = smoothstep(uZFront - 0.07, uZFront - 0.02, vBodyW.z);
            float win = clamp(band * torso * uXray, 0.0, 1.0);
            float hole = win * front;
-           if (!gl_FrontFacing && uXray > 0.08) {
-             gl_FragColor.rgb = vec3(0.05, 0.025, 0.022);
-             gl_FragColor.a = mix(0.18, 0.06, win);
-           } else {
-             gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * 0.22, hole);
-             gl_FragColor.a = mix(gl_FragColor.a, 0.06, hole);
-           }
+           if (!gl_FrontFacing) discard;
+           if (hole > 0.55) discard;
+           gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * 0.38, hole);
+           gl_FragColor.a = mix(gl_FragColor.a, 0.05, hole);
            #include <dithering_fragment>`,
         );
       cloned.userData.shader = shader;
@@ -1212,9 +1209,6 @@ function FittedFigure({
       setup.skeleton.impulse(ox, oy, oz, s.strikeForce, s.strikeRange);
       setup.strike.fire(ox, oy, oz, s.strikeForce, s.strikeRange);
       setup.gutHealth.hit(ox, oy, oz, s.strikeForce, s.strikeRange);
-      if (s.abdomenXray < 0.2) {
-        useStudio.setState({ abdomenXray: 0.78, showOrgans: true });
-      }
     }
     if (s.expression !== exprRef.current) {
       exprRef.current = s.expression;
@@ -1270,12 +1264,13 @@ function FittedFigure({
       wind: s.wind,
       time: state.clock.elapsedTime,
       breathing: s.breathing,
+      rebound: s.strikeRebound,
     });
     if (s.showOrgans && s.abdomenXray > 0.08) {
       setup.peristalsis.apply(state.clock.elapsedTime, s.gutAmp, s.gutSpeed);
     }
     setup.strike.step(dt);
-    setup.strike.apply();
+    setup.strike.apply(s.strikeRebound);
     setup.gutHealth.applyColor();
     setup.gutHealth.updateBars(camera, s.showGutHp);
     const ring = ringRef.current;
@@ -1296,9 +1291,10 @@ function FittedFigure({
     energyTick.current += 1;
     writeBindings();
     if (energyTick.current % 8 === 0) s.setEnergy(setup.skeleton.energy);
-    if (!grab.current?.active && energyTick.current % 20 === 0) {
+    if (!grab.current?.active && (setup.skeleton.hasDents ? energyTick.current % 2 === 0 : energyTick.current % 20 === 0)) {
       for (const geo of setup.boundGeos) {
-        if (geo.getAttribute("position").count < 18000) geo.computeVertexNormals();
+        const n = geo.getAttribute("position").count;
+        if (n < 80000) geo.computeVertexNormals();
       }
     }
 
@@ -1306,8 +1302,8 @@ function FittedFigure({
     for (const mat of setup.xrayList) {
       const shader = mat.userData.shader as { uniforms?: { uXray?: { value: number } } } | undefined;
       if (shader?.uniforms?.uXray) shader.uniforms.uXray.value = xray;
-      mat.depthWrite = xray < 0.2;
-      mat.side = xray > 0.2 ? THREE.DoubleSide : THREE.FrontSide;
+      mat.depthWrite = xray < 0.15;
+      mat.side = THREE.FrontSide;
       mat.transparent = xray > 0.05;
     }
     const show = s.showOrgans && xray > 0.08;

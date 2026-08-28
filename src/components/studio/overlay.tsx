@@ -92,6 +92,7 @@ export function Overlay() {
   const fireStrike = useStudio((s) => s.fireStrike);
   const strikeForce = useStudio((s) => s.strikeForce);
   const strikeRange = useStudio((s) => s.strikeRange);
+  const strikeRebound = useStudio((s) => s.strikeRebound);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -106,7 +107,7 @@ export function Overlay() {
       }
       if (e.key === "x" || e.key === "X") {
         const cur = useStudio.getState().abdomenXray;
-        setParam("abdomenXray", cur > 0.5 ? 0 : 0.82);
+        setParam("abdomenXray", cur > 0.05 ? 0 : 0.38);
         if (cur <= 0.5) setParam("showOrgans", true);
       }
       if (e.key === "k" || e.key === "K") setParam("showLattice", !useStudio.getState().showLattice);
@@ -322,17 +323,17 @@ export function Overlay() {
                   onClick={() => {
                     const next = !showOrgans;
                     setParam("showOrgans", next);
-                    if (next && abdomenXray < 0.3) setParam("abdomenXray", 0.78);
+                    if (next && abdomenXray < 0.08) setParam("abdomenXray", 0.38);
                     if (!next) setParam("abdomenXray", 0);
                   }}
                   icon={<Scan className="size-3.5" />}
                   label="脏器"
                 />
                 <Toggle
-                  active={abdomenXray > 0.4}
+                  active={abdomenXray > 0.05}
                   onClick={() => {
-                    setParam("abdomenXray", abdomenXray > 0.4 ? 0 : 0.82);
-                    if (abdomenXray <= 0.4) setParam("showOrgans", true);
+                    setParam("abdomenXray", abdomenXray > 0.05 ? 0 : 0.38);
+                    if (abdomenXray <= 0.05) setParam("showOrgans", true);
                   }}
                   icon={<Scan className="size-3.5" />}
                   label="透视"
@@ -491,6 +492,27 @@ export function Overlay() {
                         step={0.01}
                         onValueChange={([v]) => {
                           if (typeof v === "number") setParam("strikeRange", v);
+                        }}
+                        className="relative flex h-5 w-full touch-none items-center"
+                      >
+                        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2">
+                          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                        </Slider.Track>
+                        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+                      </Slider.Root>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+                        <span>回弹速度</span>
+                        <span className="tabular-nums text-fg">{strikeRebound.toFixed(2)}</span>
+                      </span>
+                      <Slider.Root
+                        value={[strikeRebound]}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onValueChange={([v]) => {
+                          if (typeof v === "number") setParam("strikeRebound", v);
                         }}
                         className="relative flex h-5 w-full touch-none items-center"
                       >

@@ -23,6 +23,7 @@ export type StudioParams = {
   gutSpeed: number;
   strikeForce: number;
   strikeRange: number;
+  strikeRebound: number;
   uiHidden: boolean;
 };
 
@@ -44,13 +45,14 @@ export const PRESETS: Record<
     showLattice: false,
     showWeights: false,
     autoRotate: false,
-    abdomenXray: 0,
+    abdomenXray: 0.38,
     showOrgans: true,
     showGutHp: false,
     gutAmp: 0.3,
     gutSpeed: 0.5,
     strikeForce: 0.78,
     strikeRange: 0.55,
+    strikeRebound: 0.58,
     uiHidden: false,
   },
   firm: {
@@ -67,13 +69,14 @@ export const PRESETS: Record<
     showLattice: false,
     showWeights: false,
     autoRotate: false,
-    abdomenXray: 0,
+    abdomenXray: 0.38,
     showOrgans: true,
     showGutHp: false,
     gutAmp: 0.3,
     gutSpeed: 0.5,
     strikeForce: 0.78,
     strikeRange: 0.55,
+    strikeRebound: 0.58,
     uiHidden: false,
   },
   jelly: {
@@ -90,13 +93,14 @@ export const PRESETS: Record<
     showLattice: false,
     showWeights: false,
     autoRotate: false,
-    abdomenXray: 0,
+    abdomenXray: 0.38,
     showOrgans: true,
     showGutHp: false,
     gutAmp: 0.3,
     gutSpeed: 0.5,
     strikeForce: 0.78,
     strikeRange: 0.55,
+    strikeRebound: 0.58,
     uiHidden: false,
   },
   athletic: {
@@ -113,13 +117,14 @@ export const PRESETS: Record<
     showLattice: false,
     showWeights: false,
     autoRotate: false,
-    abdomenXray: 0,
+    abdomenXray: 0.38,
     showOrgans: true,
     showGutHp: false,
     gutAmp: 0.3,
     gutSpeed: 0.5,
     strikeForce: 0.78,
     strikeRange: 0.55,
+    strikeRebound: 0.58,
     uiHidden: false,
   },
 };
@@ -187,6 +192,7 @@ export const useStudio = create<StudioState>((set) => ({
       gutSpeed: s.gutSpeed,
       strikeForce: s.strikeForce,
       strikeRange: s.strikeRange,
+      strikeRebound: s.strikeRebound,
       showLattice: s.showLattice,
       showWeights: s.showWeights,
       uiHidden: s.uiHidden,

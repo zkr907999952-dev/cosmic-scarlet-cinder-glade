@@ -38,11 +38,13 @@ export class BellyStrike {
   step(dt: number) {
     const d = Math.min(dt, 0.05);
     for (const w of this.waves) w.t += d;
-    this.waves = this.waves.filter((w) => w.t < 3.4);
+    this.waves = this.waves.filter((w) => w.t < 3.6);
   }
 
-  apply() {
+  apply(rebound = 0.58) {
     if (!this.waves.length) return;
+    const rec = 1.05 + (1 - THREE.MathUtils.clamp(rebound, 0, 1)) * 2.4;
+    const decay = 0.28 + rebound * 0.85;
     for (const tube of this.tubes) {
       const { positions, count } = tube;
       for (let i = 0; i < count; i++) {
@@ -57,10 +59,10 @@ export class BellyStrike {
           const span = 0.055 + w.range * 0.13;
           const ringR = w.t * (0.18 + w.range * 0.15);
           const width = 0.03 + w.range * 0.024;
-          const life = Math.max(0, 1 - w.t / 3.2);
+          const life = Math.max(0, 1 - w.t / rec);
           const fade = life * life * (3 - 2 * life);
           const ring = Math.exp(-((r - ringR) / width) * ((r - ringR) / width));
-          const hole = Math.exp(-(r * r) / (span * span * 0.55)) * Math.exp(-w.t * 0.4);
+          const hole = Math.exp(-(r * r) / (span * span * 0.55)) * Math.exp(-w.t * decay);
           const amp = w.force * fade;
           const inv = r < 1e-4 ? 0 : 1 / r;
           const push = amp * (0.03 * ring + 0.026 * hole);

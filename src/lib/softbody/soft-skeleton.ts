@@ -8,6 +8,7 @@ export type SkelParams = {
   wind: number;
   time: number;
   breathing: boolean;
+  rebound: number;
 };
 
 export type ExpressionId = "rest" | "smile" | "surprise" | "open";
@@ -121,6 +122,7 @@ export class SoftSkeleton {
   private readonly off: THREE.Vector3[] = [];
   private hold: Hold | null = null;
   private dents: { x: number; y: number; z: number; t: number; force: number; range: number }[] = [];
+  private rebound = 0.58;
   private yawVel = 0;
   private pitchVel = 0;
   private yawF = 0;
@@ -578,6 +580,7 @@ export class SoftSkeleton {
 
   step(dt: number, params: SkelParams) {
     const d = Math.min(dt, 0.04);
+    this.rebound = THREE.MathUtils.clamp(params.rebound, 0, 1);
     this.applyHoldPose();
     const heldBone = this.hold?.kind === "pose" ? this.hold.bone : -1;
     const heldParent = heldBone >= 0 ? this.parent[heldBone] : -1;
@@ -689,20 +692,28 @@ export class SoftSkeleton {
     }
   }
 
+  get hasDents() {
+    return this.dents.length > 0;
+  }
+
   private stepDents(d: number) {
+    const rec = 0.5 + (1 - this.rebound) * 3.4;
+    const hold = 0.18 + (1 - this.rebound) * 0.28;
     for (const dent of this.dents) dent.t += d;
-    this.dents = this.dents.filter((dent) => dent.t < 4.2);
+    this.dents = this.dents.filter((dent) => dent.t < hold + rec + 0.15);
   }
 
   private dentGain(t: number) {
-    if (t < 0.06) {
-      const u = t / 0.06;
+    const hold = 0.18 + (1 - this.rebound) * 0.28;
+    const rec = 0.5 + (1 - this.rebound) * 3.4;
+    if (t < 0.055) {
+      const u = t / 0.055;
       return u * u;
     }
-    if (t < 0.4) return 1;
-    const u = Math.min(1, (t - 0.4) / 3.5);
+    if (t < hold) return 1;
+    const u = Math.min(1, (t - hold) / rec);
     const s = 1 - u;
-    return s * s * s;
+    return s * s * (3 - 2 * s);
   }
 
   private stepTissue(d: number, params: SkelParams) {
