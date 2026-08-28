@@ -18,6 +18,8 @@ export type StudioParams = {
   autoRotate: boolean;
   abdomenXray: number;
   showOrgans: boolean;
+  gutAmp: number;
+  gutSpeed: number;
   uiHidden: boolean;
 };
 
@@ -41,6 +43,8 @@ export const PRESETS: Record<
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
+    gutAmp: 0.72,
+    gutSpeed: 0.42,
     uiHidden: false,
   },
   firm: {
@@ -59,6 +63,8 @@ export const PRESETS: Record<
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
+    gutAmp: 0.72,
+    gutSpeed: 0.42,
     uiHidden: false,
   },
   jelly: {
@@ -77,6 +83,8 @@ export const PRESETS: Record<
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
+    gutAmp: 0.72,
+    gutSpeed: 0.42,
     uiHidden: false,
   },
   athletic: {
@@ -95,6 +103,8 @@ export const PRESETS: Record<
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
+    gutAmp: 0.72,
+    gutSpeed: 0.42,
     uiHidden: false,
   },
 };
@@ -152,6 +162,8 @@ export const useStudio = create<StudioState>((set) => ({
       preset: id,
       abdomenXray: s.abdomenXray,
       showOrgans: s.showOrgans,
+      gutAmp: s.gutAmp,
+      gutSpeed: s.gutSpeed,
       showLattice: s.showLattice,
       showWeights: s.showWeights,
       uiHidden: s.uiHidden,

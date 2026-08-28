@@ -261,8 +261,8 @@ function computeRadial(rest: Float32Array, along: Float32Array, count: number, a
     let ry = rest[i * 3 + 1]! - my;
     let rz = rest[i * 3 + 2]! - mz;
     const len = Math.hypot(rx, ry, rz);
-    if (len > 0.018) {
-      const s = 0.018 / len;
+    if (len > 0.022) {
+      const s = 0.022 / len;
       rx *= s;
       ry *= s;
       rz *= s;
@@ -300,21 +300,22 @@ function lobe(frac: number, width: number) {
   return t * t * (3 - 2 * t);
 }
 
-function pulse(along: number, time: number) {
+function pulse(along: number, time: number, amp: number, speed: number) {
   const n = 1.55;
-  const speed = 0.07;
-  let p = along * n - time * speed * n;
+  const sp = 0.03 + speed * 0.2;
+  let p = along * n - time * sp * n;
   p -= Math.floor(p);
   const perist = lobe(p, 0.34);
-  let p2 = along * 0.85 - time * 0.04;
+  let p2 = along * 0.85 - time * sp * 0.55;
   p2 -= Math.floor(p2);
   const perist2 = lobe(p2, 0.42);
-  const haustra = 0.5 + 0.5 * Math.sin(along * 12 * Math.PI - time * 0.8);
-  const mix = 0.5 + 0.5 * Math.sin(along * 7 * Math.PI + time * 0.45);
+  const haustra = 0.5 + 0.5 * Math.sin(along * 12 * Math.PI - time * (0.45 + speed * 0.9));
+  const mix = 0.5 + 0.5 * Math.sin(along * 7 * Math.PI + time * (0.25 + speed * 0.5));
   const hs = haustra * haustra * (3 - 2 * haustra);
   const ms = mix * mix * (3 - 2 * mix);
   const seg = hs * 0.45 + ms * 0.25;
-  return perist * 0.14 + perist2 * 0.07 + seg * 0.04;
+  const shape = perist * 0.62 + perist2 * 0.28 + seg * 0.18;
+  return shape * (0.16 + amp * 0.42);
 }
 
 export class GutPeristalsis {
@@ -337,11 +338,13 @@ export class GutPeristalsis {
     });
   }
 
-  apply(time: number) {
+  apply(time: number, amp = 0.72, speed = 0.42) {
+    const a = THREE.MathUtils.clamp(amp, 0, 1);
+    const s = THREE.MathUtils.clamp(speed, 0, 1);
     for (const tube of this.tubes) {
       const { positions, along, rad, count } = tube;
       for (let i = 0; i < count; i++) {
-        const k = pulse(along[i]!, time);
+        const k = pulse(along[i]!, time, a, s);
         const i3 = i * 3;
         positions[i3] -= rad[i3]! * k;
         positions[i3 + 1] -= rad[i3 + 1]! * k;

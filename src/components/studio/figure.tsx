@@ -1246,7 +1246,7 @@ function FittedFigure({
       breathing: s.breathing,
     });
     if (s.showOrgans && s.abdomenXray > 0.08) {
-      setup.peristalsis.apply(state.clock.elapsedTime);
+      setup.peristalsis.apply(state.clock.elapsedTime, s.gutAmp, s.gutSpeed);
     }
 
     energyTick.current += 1;
