@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { SoftSkeleton } from "@/lib/softbody/soft-skeleton";
+import { GutPeristalsis } from "@/lib/softbody/peristalsis";
 import { useStudio } from "@/lib/studio-store";
 
 const _hit = new THREE.Vector3();
@@ -1045,6 +1046,8 @@ function FittedFigure({
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) bindMesh(mesh, "organs");
     });
+    const peristalsis = new GutPeristalsis();
+    peristalsis.attach(gut);
     pelvic.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) bindMesh(mesh, "organs");
@@ -1120,6 +1123,7 @@ function FittedFigure({
       xrayList,
       gutRoot: gut,
       pelvisRoot: pelvic,
+      peristalsis,
       boundGeos,
       bellyLight,
       weightViews,
@@ -1241,6 +1245,9 @@ function FittedFigure({
       time: state.clock.elapsedTime,
       breathing: s.breathing,
     });
+    if (s.showOrgans && s.abdomenXray > 0.08) {
+      setup.peristalsis.apply(state.clock.elapsedTime);
+    }
 
     energyTick.current += 1;
     writeBindings();
@@ -1263,6 +1270,14 @@ function FittedFigure({
     setup.gutRoot.visible = show;
     setup.pelvisRoot.visible = show;
     setup.bellyLight.intensity = show ? 0.18 + xray * 0.22 : 0;
+    if (show && energyTick.current % 6 === 0) {
+      setup.gutRoot.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (!mesh.isMesh || !mesh.geometry) return;
+        const n = mesh.geometry.getAttribute("position")?.count ?? 0;
+        if (n > 0 && n < 120000) mesh.geometry.computeVertexNormals();
+      });
+    }
 
     setup.boneVis.visible = s.showLattice;
     if (s.showLattice) {
