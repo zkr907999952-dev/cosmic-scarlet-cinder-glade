@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>VELA card</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Noto+Serif+SC:wght@500&family=Outfit:wght@300;400&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --charcoal: #0b0b0c;
+        --sand: #d4b5a0;
+        --ivory: #f2efe9;
+        --stone: #9a958c;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--charcoal);
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+        -webkit-font-smoothing: antialiased;
+      }
+      #c {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .vignette {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(
+          ellipse at 62% 46%,
+          transparent 34%,
+          rgba(11, 11, 12, 0.18) 68%,
+          rgba(11, 11, 12, 0.48) 100%
+        );
+      }
+      .grain {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.07;
+        mix-blend-mode: overlay;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.9'/%3E%3C/svg%3E");
+      }
+      .lockup {
+        position: absolute;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        color: var(--ivory);
+        pointer-events: none;
+        z-index: 2;
+      }
+      body.og .lockup {
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: min(58%, 700px);
+        background: radial-gradient(
+          ellipse at center,
+          rgba(11, 11, 12, 0.42) 0%,
+          rgba(11, 11, 12, 0.12) 55%,
+          transparent 74%
+        );
+        padding: 36px 28px 28px;
+      }
+      body.banner .lockup {
+        left: 4.6%;
+        top: 14%;
+        align-items: flex-start;
+        text-align: left;
+        width: 44%;
+      }
+      body.banner .vignette {
+        background: linear-gradient(
+          90deg,
+          rgba(11, 11, 12, 0.55) 0%,
+          rgba(11, 11, 12, 0.18) 38%,
+          transparent 62%
+        );
+      }
+      .mark {
+        font-family: "Cormorant Garamond", "Noto Serif SC", serif;
+        font-weight: 600;
+        font-size: 148px;
+        letter-spacing: 0.2em;
+        line-height: 0.86;
+        margin: 0;
+        padding-left: 0.2em;
+        color: var(--ivory);
+        text-shadow: 0 8px 36px rgba(11, 11, 12, 0.7);
+      }
+      body.banner .mark {
+        font-size: 92px;
+        letter-spacing: 0.2em;
+        padding-left: 0.2em;
+      }
+      .rule {
+        width: 42%;
+        height: 1px;
+        margin: 18px 0 16px;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          var(--sand) 18%,
+          var(--sand) 82%,
+          transparent
+        );
+        opacity: 0.85;
+      }
+      body.banner .rule {
+        width: 120px;
+        margin: 10px 0 8px;
+        background: var(--sand);
+      }
+      .sub {
+        font-family: "Outfit", "Noto Serif SC", sans-serif;
+        font-weight: 300;
+        font-size: 22px;
+        letter-spacing: 0.34em;
+        text-transform: uppercase;
+        color: var(--stone);
+        margin: 0;
+        padding-left: 0.34em;
+      }
+      body.banner .sub {
+        font-size: 13px;
+        letter-spacing: 0.28em;
+        padding-left: 0.08em;
+      }
+      .cn {
+        font-family: "Noto Serif SC", "Cormorant Garamond", serif;
+        font-weight: 500;
+        font-size: 18px;
+        letter-spacing: 0.42em;
+        color: var(--sand);
+        margin: 10px 0 0;
+        padding-left: 0.42em;
+        opacity: 0.92;
+      }
+      body.banner .cn {
+        font-size: 12px;
+        letter-spacing: 0.32em;
+        margin-top: 6px;
+        padding-left: 0.08em;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <div class="vignette"></div>
+    <div class="grain"></div>
+    <div class="lockup">
+      <h1 class="mark">VELA</h1>
+      <div class="rule"></div>
+      <p class="sub">Soft Body Studio</p>
+      <p class="cn">腰腹柔体模拟器</p>
+    </div>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "/node_modules/three/build/three.module.js"
+        }
+      }
+    </script>
+    <script type="module">
+      import * as THREE from "three";
+
+      const params = new URLSearchParams(location.search);
+      const mode = params.get("mode") || "og";
+      document.body.classList.add(mode);
+      if (params.get("notext") === "1") {
+        document.querySelector(".lockup").style.display = "none";
+      }
+
+      const KEYS = [
+        { y: 0.78, rx: 0.118, rz: 0.11, z0: 0.008 },
+        { y: 0.84, rx: 0.128, rz: 0.118, z0: 0.012 },
+        { y: 0.9, rx: 0.152, rz: 0.132, z0: 0.02 },
+        { y: 0.955, rx: 0.168, rz: 0.142, z0: 0.028 },
+        { y: 1.01, rx: 0.142, rz: 0.128, z0: 0.034 },
+        { y: 1.055, rx: 0.12, rz: 0.118, z0: 0.042 },
+        { y: 1.108, rx: 0.1, rz: 0.096, z0: 0.034 },
+        { y: 1.16, rx: 0.106, rz: 0.098, z0: 0.028 },
+        { y: 1.22, rx: 0.12, rz: 0.102, z0: 0.022 },
+        { y: 1.268, rx: 0.136, rz: 0.122, z0: 0.038 },
+        { y: 1.332, rx: 0.15, rz: 0.14, z0: 0.052 },
+        { y: 1.39, rx: 0.132, rz: 0.105, z0: 0.022 },
+        { y: 1.455, rx: 0.178, rz: 0.09, z0: 0.004 },
+        { y: 1.5, rx: 0.078, rz: 0.07, z0: 0.0 },
+        { y: 1.54, rx: 0.046, rz: 0.044, z0: 0.0 },
+      ];
+
+      const clamp01 = (t) => (t < 0 ? 0 : t > 1 ? 1 : t);
+      const smoothstep = (e0, e1, x) => {
+        const t = clamp01((x - e0) / (e1 - e0));
+        return t * t * (3 - 2 * t);
+      };
+      const gaussian = (x, mu, sigma) => {
+        const d = (x - mu) / sigma;
+        return Math.exp(-0.5 * d * d);
+      };
+
+      function interpKey(y) {
+        if (y <= KEYS[0].y) return KEYS[0];
+        const last = KEYS[KEYS.length - 1];
+        if (y >= last.y) return last;
+        for (let i = 0; i < KEYS.length - 1; i++) {
+          const a = KEYS[i];
+          const b = KEYS[i + 1];
+          if (y >= a.y && y <= b.y) {
+            const t = smoothstep(a.y, b.y, y);
+            return {
+              y,
+              rx: a.rx + (b.rx - a.rx) * t,
+              rz: a.rz + (b.rz - a.rz) * t,
+              z0: a.z0 + (b.z0 - a.z0) * t,
+            };
+          }
+        }
+        return last;
+      }
+
+      function sample(y, theta) {
+        const key = interpKey(y);
+        const c = Math.cos(theta);
+        const s = Math.sin(theta);
+        let rx = key.rx;
+        let rz = key.rz;
+        let z0 = key.z0;
+        const belly =
+          0.026 *
+          smoothstep(0.995, 1.04, y) *
+          (1 - smoothstep(1.1, 1.2, y)) *
+          Math.pow(Math.max(c, 0), 1.15);
+        rz += belly;
+        z0 += belly * 0.35;
+        const glute =
+          0.038 * gaussian(y, 0.93, 0.055) * Math.pow(Math.max(-c, 0), 1.45);
+        rz += glute;
+        z0 -= glute * 0.25;
+        const shoulder =
+          0.042 * gaussian(y, 1.462, 0.038) * Math.pow(Math.abs(s), 1.1);
+        rx += shoulder;
+        rz -= shoulder * 0.35;
+        const bustEnv = gaussian(y, 1.328, 0.052);
+        const left = gaussian(theta, 0.46, 0.42);
+        const right = gaussian(theta, -0.46, 0.42);
+        const bust = bustEnv * (left + right) * 0.058;
+        rz += bust;
+        rx += bust * 0.28;
+        z0 += bust * 0.45;
+        rx += 0.01 * gaussian(y, 0.96, 0.04) * Math.abs(s);
+        return {
+          x: rx * s,
+          y,
+          z: z0 + rz * c,
+        };
+      }
+
+      function wearMix(y) {
+        const shorts = smoothstep(0.78, 0.82, y) * (1 - smoothstep(1.005, 1.04, y));
+        const top = smoothstep(1.228, 1.255, y) * (1 - smoothstep(1.385, 1.42, y));
+        return Math.max(shorts, top);
+      }
+
+      function buildBody() {
+        const ySegs = 96;
+        const thSegs = 72;
+        const y0 = 0.78;
+        const y1 = 1.54;
+        const positions = [];
+        const normals = [];
+        const colors = [];
+        const indices = [];
+        const skin = new THREE.Color("#c9a894");
+        const wear = new THREE.Color("#9a7562");
+        const shade = new THREE.Color();
+        const lit = new THREE.Color();
+        const keyDir = new THREE.Vector3(0.55, 0.42, 0.72).normalize();
+        const rimDir = new THREE.Vector3(-0.62, 0.18, -0.55).normalize();
+        const nrm = new THREE.Vector3();
+
+        for (let iy = 0; iy <= ySegs; iy++) {
+          const y = y0 + (y1 - y0) * (iy / ySegs);
+          const w = wearMix(y);
+          shade.copy(skin).lerp(wear, w);
+          for (let it = 0; it <= thSegs; it++) {
+            const theta = (it / thSegs) * Math.PI * 2;
+            const p = sample(y, theta);
+            positions.push(p.x, p.y, p.z);
+            colors.push(shade.r, shade.g, shade.b);
+          }
+        }
+        for (let iy = 0; iy < ySegs; iy++) {
+          for (let it = 0; it < thSegs; it++) {
+            const a = iy * (thSegs + 1) + it;
+            const b = a + thSegs + 1;
+            indices.push(a, a + 1, b, a + 1, b + 1, b);
+          }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+        geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+        const nrmAttr = geo.getAttribute("normal");
+        const colAttr = geo.getAttribute("color");
+        for (let i = 0; i < colAttr.count; i++) {
+          nrm.set(nrmAttr.getX(i), nrmAttr.getY(i), nrmAttr.getZ(i));
+          const ndl = Math.max(0, nrm.dot(keyDir));
+          const wrap = 0.38 + Math.pow(ndl, 1.02) * 0.9;
+          const rim = Math.pow(1 - Math.max(0, Math.min(1, nrm.z)), 1.8) * 0.55;
+          lit.set(colAttr.getX(i), colAttr.getY(i), colAttr.getZ(i));
+          lit.r = Math.min(1, lit.r * wrap + 0.83 * rim);
+          lit.g = Math.min(1, lit.g * wrap + 0.71 * rim);
+          lit.b = Math.min(1, lit.b * wrap + 0.63 * rim);
+          colAttr.setXYZ(i, lit.r, lit.g, lit.b);
+        }
+        colAttr.needsUpdate = true;
+        return geo;
+      }
+
+      function buildLattice() {
+        const pts = [];
+        const y0 = 1.02;
+        const y1 = 1.24;
+        const rings = 7;
+        const meridians = 16;
+        for (let i = 0; i < rings; i++) {
+          const y = y0 + ((y1 - y0) * i) / (rings - 1);
+          for (let t = 0; t < 64; t++) {
+            const a = sample(y, (t / 64) * Math.PI * 2);
+            const b = sample(y, ((t + 1) / 64) * Math.PI * 2);
+            pts.push(a.x, a.y, a.z, b.x, b.y, b.z);
+          }
+        }
+        for (let m = 0; m < meridians; m++) {
+          const theta = (m / meridians) * Math.PI * 2;
+          for (let i = 0; i < 24; i++) {
+            const ya = y0 + ((y1 - y0) * i) / 24;
+            const yb = y0 + ((y1 - y0) * (i + 1)) / 24;
+            const a = sample(ya, theta);
+            const b = sample(yb, theta);
+            pts.push(a.x, a.y, a.z, b.x, b.y, b.z);
+          }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+        return geo;
+      }
+
+      const canvas = document.getElementById("c");
+      const renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: true,
+        alpha: false,
+        preserveDrawingBuffer: true,
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight, false);
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.NoToneMapping;
+      renderer.shadowMap.enabled = false;
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color("#0b0b0c");
+
+      const camera = new THREE.PerspectiveCamera(
+        mode === "banner" ? 26 : 30,
+        window.innerWidth / window.innerHeight,
+        0.05,
+        20,
+      );
+
+      if (mode === "banner") {
+        camera.position.set(0.22, 1.13, 0.95);
+        camera.lookAt(0.22, 1.12, 0.0);
+      } else {
+        camera.position.set(0.32, 1.13, 0.9);
+        camera.lookAt(0.12, 1.12, 0.0);
+      }
+
+      const body = new THREE.Mesh(
+        buildBody(),
+        new THREE.MeshBasicMaterial({
+          vertexColors: true,
+          side: THREE.FrontSide,
+        }),
+      );
+      body.position.x = mode === "banner" ? 0.5 : 0.3;
+      body.rotation.y = 0.42;
+      body.scale.setScalar(1.16);
+      scene.add(body);
+
+      const outline = new THREE.Mesh(
+        body.geometry,
+        new THREE.MeshBasicMaterial({
+          color: "#d4b5a0",
+          side: THREE.BackSide,
+        }),
+      );
+      outline.position.copy(body.position);
+      outline.rotation.copy(body.rotation);
+      outline.scale.copy(body.scale).multiplyScalar(1.048);
+      scene.add(outline);
+
+      const lattice = new THREE.LineSegments(
+        buildLattice(),
+        new THREE.LineBasicMaterial({
+          color: "#f2efe9",
+          transparent: true,
+          opacity: 0.72,
+        }),
+      );
+      lattice.position.copy(body.position);
+      lattice.rotation.copy(body.rotation);
+      lattice.scale.copy(body.scale).multiplyScalar(1.02);
+      scene.add(lattice);
+
+      const floor = new THREE.Mesh(
+        new THREE.CircleGeometry(3.2, 64),
+        new THREE.MeshBasicMaterial({ color: "#141416" }),
+      );
+      floor.rotation.x = -Math.PI / 2;
+      floor.position.y = 0.78;
+      floor.receiveShadow = true;
+      scene.add(floor);
+
+      renderer.render(scene, camera);
+      document.fonts.ready.then(() => {
+        renderer.render(scene, camera);
+        document.body.dataset.ready = "1";
+      });
+      requestAnimationFrame(() => {
+        renderer.render(scene, camera);
+        setTimeout(() => {
+          renderer.render(scene, camera);
+          document.body.dataset.ready = "1";
+        }, 80);
+      });
+    </script>
+  </body>
+</html>

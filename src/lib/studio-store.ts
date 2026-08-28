@@ -1,0 +1,159 @@
+import { create } from "zustand";
+
+export type PresetId = "soft" | "firm" | "jelly" | "athletic";
+export type InteractMode = "press" | "drag";
+
+export type StudioParams = {
+  stiffness: number;
+  damping: number;
+  gravity: number;
+  pressure: number;
+  jiggle: number;
+  wind: number;
+  breathing: boolean;
+  slowMo: boolean;
+  showLattice: boolean;
+  autoRotate: boolean;
+  abdomenXray: number;
+  showOrgans: boolean;
+  uiHidden: boolean;
+};
+
+export const PRESETS: Record<
+  PresetId,
+  { label: string; hint: string } & StudioParams
+> = {
+  soft: {
+    label: "柔软",
+    hint: "松弛回弹",
+    stiffness: 0.28,
+    damping: 0.94,
+    gravity: -1.4,
+    pressure: 0.55,
+    jiggle: 1,
+    wind: 0,
+    breathing: true,
+    slowMo: false,
+    showLattice: false,
+    autoRotate: false,
+    abdomenXray: 0,
+    showOrgans: true,
+    uiHidden: false,
+  },
+  firm: {
+    label: "紧致",
+    hint: "快速复位",
+    stiffness: 0.82,
+    damping: 0.9,
+    gravity: -0.4,
+    pressure: 0.85,
+    jiggle: 0.55,
+    wind: 0,
+    breathing: true,
+    slowMo: false,
+    showLattice: false,
+    autoRotate: false,
+    abdomenXray: 0,
+    showOrgans: true,
+    uiHidden: false,
+  },
+  jelly: {
+    label: "果冻",
+    hint: "长时间晃动",
+    stiffness: 0.16,
+    damping: 0.985,
+    gravity: -0.2,
+    pressure: 0.7,
+    jiggle: 1,
+    wind: 0.15,
+    breathing: false,
+    slowMo: false,
+    showLattice: false,
+    autoRotate: false,
+    abdomenXray: 0,
+    showOrgans: true,
+    uiHidden: false,
+  },
+  athletic: {
+    label: "运动",
+    hint: "弹性支撑",
+    stiffness: 0.58,
+    damping: 0.92,
+    gravity: -0.8,
+    pressure: 0.72,
+    jiggle: 0.78,
+    wind: 0,
+    breathing: true,
+    slowMo: false,
+    showLattice: false,
+    autoRotate: false,
+    abdomenXray: 0,
+    showOrgans: true,
+    uiHidden: false,
+  },
+};
+
+type StudioState = StudioParams & {
+  preset: PresetId;
+  interactMode: InteractMode;
+  energy: number;
+  grabbing: boolean;
+  shakeNonce: number;
+  resetNonce: number;
+  loading: boolean;
+  loadProgress: number;
+  loadHint: string;
+  loadError: string | null;
+  retryNonce: number;
+  setParam: <K extends keyof StudioParams>(key: K, value: StudioParams[K]) => void;
+  applyPreset: (id: PresetId) => void;
+  setInteractMode: (mode: InteractMode) => void;
+  setEnergy: (v: number) => void;
+  setGrabbing: (v: boolean) => void;
+  shake: () => void;
+  resetSim: () => void;
+  retryLoad: () => void;
+};
+
+export const useStudio = create<StudioState>((set) => ({
+  ...PRESETS.soft,
+  preset: "soft",
+  interactMode: "press",
+  energy: 0,
+  grabbing: false,
+  shakeNonce: 0,
+  resetNonce: 0,
+  loading: true,
+  loadProgress: 0,
+  loadHint: "准备下载",
+  loadError: null,
+  retryNonce: 0,
+  setParam: (key, value) =>
+    set((s) => ({
+      ...s,
+      [key]: value,
+      preset: s.preset,
+    })),
+  applyPreset: (id) =>
+    set((s) => ({
+      ...PRESETS[id],
+      preset: id,
+      abdomenXray: s.abdomenXray,
+      showOrgans: s.showOrgans,
+      uiHidden: s.uiHidden,
+      interactMode: s.interactMode,
+    })),
+  setInteractMode: (interactMode) => set({ interactMode }),
+  setEnergy: (energy) => set({ energy }),
+  setGrabbing: (grabbing) => set({ grabbing }),
+  shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),
+  resetSim: () => set((s) => ({ resetNonce: s.resetNonce + 1, energy: 0 })),
+  retryLoad: () =>
+    set((s) => ({
+      loading: true,
+      loadProgress: 0,
+      loadHint: "重新下载",
+      loadError: null,
+      retryNonce: s.retryNonce + 1,
+    })),
+}));

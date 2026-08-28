@@ -1,0 +1,40 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "VELA",
+      "hasCanvas": false,
+      "bodyTextLen": 216,
+      "bodyTextHash": "adcd688c2f4bbd1d220ff582a47a11a675fe8b040bf319c39c9b0e4b14f9ef8c",
+      "bodyTextPrefix": "载入模型 0% VELA 腰腹柔体模拟 柔软 紧致 果冻 运动 左键拖动按压腰腹，右键旋转视角，中键平移。调高「腹部半透明」可观",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "VELA",
+      "hasCanvas": false,
+      "bodyTextLen": 33,
+      "bodyTextHash": "a446c89cbdb110d9b7755e4ed02aa1f966ddf3845d74847616917224bb45e082",
+      "bodyTextPrefix": "载入模型 0% VELA 腰腹柔体模拟 物理参数 展开 晃动 复位",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": true,
+  "baselineReasons": [
+    "mobile: canvas disappeared"
+  ]
+}
