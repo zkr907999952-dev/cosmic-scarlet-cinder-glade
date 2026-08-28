@@ -64,6 +64,65 @@ function shouldBind(mesh: THREE.Object3D) {
   return n >= 12;
 }
 
+function findCrotch(body: THREE.Object3D, height: number) {
+  const y0 = height * 0.49;
+  const y1 = height * 0.545;
+  const best = new THREE.Vector3(0, height * 0.515, 0.05);
+  let bestScore = -Infinity;
+  body.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    if (!isTorsoMesh(mesh) && !/skin|dress/.test(meshKey(mesh))) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    const step = Math.max(1, Math.floor(pos.count / 9000));
+    for (let i = 0; i < pos.count; i += step) {
+      _local.fromBufferAttribute(pos, i);
+      mesh.localToWorld(_local);
+      if (_local.y < y0 || _local.y > y1) continue;
+      if (Math.abs(_local.x) > 0.03) continue;
+      const score = _local.z * 6 - Math.abs(_local.x) * 10 - (_local.y - y0) * 1.8;
+      if (score > bestScore) {
+        bestScore = score;
+        best.copy(_local);
+      }
+    }
+  });
+  return best;
+}
+
+function liftGutsOffUterus(gut: THREE.Object3D, uterusBox: THREE.Box3) {
+  const ucx = (uterusBox.min.x + uterusBox.max.x) * 0.5;
+  const ucy = (uterusBox.min.y + uterusBox.max.y) * 0.5;
+  const ucz = (uterusBox.min.z + uterusBox.max.z) * 0.5;
+  const hx = Math.max(0.02, (uterusBox.max.x - uterusBox.min.x) * 0.5 + 0.012);
+  const hy = Math.max(0.02, (uterusBox.max.y - uterusBox.min.y) * 0.5 + 0.01);
+  const hz = Math.max(0.02, (uterusBox.max.z - uterusBox.min.z) * 0.5 + 0.01);
+  const ySurf = uterusBox.max.y + 0.006;
+  gut.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos || !(pos.array instanceof Float32Array)) return;
+    const arr = pos.array;
+    for (let i = 0; i < pos.count; i++) {
+      const i3 = i * 3;
+      const nx = (arr[i3]! - ucx) / hx;
+      const ny = (arr[i3 + 1]! - ucy) / hy;
+      const nz = (arr[i3 + 2]! - ucz) / hz;
+      const d2 = nx * nx + ny * ny + nz * nz;
+      if (d2 >= 1) continue;
+      const d = Math.sqrt(Math.max(d2, 1e-6));
+      const s = 1.08 / d;
+      arr[i3] = ucx + nx * hx * s;
+      arr[i3 + 1] = Math.max(ucy + ny * hy * s, ySurf);
+      arr[i3 + 2] = ucz + nz * hz * s;
+    }
+    pos.needsUpdate = true;
+    mesh.geometry.computeBoundingBox();
+  });
+}
+
 function findNavel(body: THREE.Object3D, height: number) {
   const y0 = height * 0.56;
   const y1 = height * 0.63;
@@ -188,11 +247,11 @@ function sampleLandmarks(body: THREE.Object3D, navel: THREE.Vector3, height: num
   return lm;
 }
 
-function hideExternalGenitals(root: THREE.Object3D) {
+function hideInternalBits(root: THREE.Object3D) {
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (!mesh.isMesh) return;
-    if (/vulve|clitoris|corpsetracines|materialcorps|materialbulbes/.test(meshKey(mesh))) {
+    if (/corpsetracines|materialcorps/.test(meshKey(mesh))) {
       mesh.visible = false;
     }
   });
@@ -421,10 +480,8 @@ function placeGuts(source: THREE.Object3D, cavity: THREE.Box3, navel: THREE.Vect
   const src = new THREE.Box3().setFromObject(root);
   const ss = src.getSize(new THREE.Vector3());
   const ts = cavity.getSize(new THREE.Vector3());
-  const sy = ts.y / Math.max(ss.y, 1e-4);
-  const sx = (ts.x / Math.max(ss.x, 1e-4)) * 0.98;
-  const sz = (ts.z / Math.max(ss.z, 1e-4)) * 1.1;
-  root.scale.set(sx, sy, sz);
+  const s = Math.min(ts.x / Math.max(ss.x, 1e-4), ts.y / Math.max(ss.y, 1e-4)) * 1.08;
+  root.scale.set(s * 1.02, (ts.y / Math.max(ss.y, 1e-4)) * 1.04, s * 1.08);
   root.updateMatrixWorld(true);
   const after = new THREE.Box3().setFromObject(root);
   const ac = after.getCenter(new THREE.Vector3());
@@ -441,11 +498,30 @@ function placeGuts(source: THREE.Object3D, cavity: THREE.Box3, navel: THREE.Vect
   return baked;
 }
 
+function sampleAt(arr: Float32Array, t01: number) {
+  const n = arr.length;
+  const x = THREE.MathUtils.clamp(t01, 0, 1) * (n - 1);
+  const i = Math.min(n - 2, Math.max(0, Math.floor(x)));
+  const f = x - i;
+  return arr[i]! * (1 - f) + arr[i + 1]! * f;
+}
+
+function blurBands(arr: Float32Array) {
+  const n = arr.length;
+  const tmp = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const a = arr[Math.max(0, i - 1)]!;
+    const b = arr[i]!;
+    const c = arr[Math.min(n - 1, i + 1)]!;
+    tmp[i] = a * 0.25 + b * 0.5 + c * 0.25;
+  }
+  arr.set(tmp);
+}
+
 function shapeGutToProfile(group: THREE.Object3D, cavity: THREE.Box3, navel: THREE.Vector3, profile: TorsoSlice[]) {
   const box = new THREE.Box3().setFromObject(group);
   const y0 = box.min.y;
-  const y1 = box.max.y;
-  const span = Math.max(1e-4, y1 - y0);
+  const span = Math.max(1e-4, box.max.y - y0);
   const cx = (box.min.x + box.max.x) * 0.5;
   const ny = navel.y;
   const yLo = cavity.min.y;
@@ -459,19 +535,19 @@ function shapeGutToProfile(group: THREE.Object3D, cavity: THREE.Box3, navel: THR
     const arr = pos.array;
     for (let i = 0; i < pos.count; i++) {
       const t = THREE.MathUtils.clamp((arr[i * 3 + 1]! - y0) / span, 0, 1);
-      arr[i * 3 + 1] = yLo + t * (yHi - yLo);
+      arr[i * 3 + 1] = yLo + Math.pow(t, 1.38) * (yHi - yLo);
     }
     pos.needsUpdate = true;
   });
 
   const box2 = new THREE.Box3().setFromObject(group);
   const y0b = box2.min.y;
-  const y1b = box2.max.y;
-  const spanb = Math.max(1e-4, y1b - y0b);
-  const bands = 24;
+  const spanb = Math.max(1e-4, box2.max.y - y0b);
+  const bands = 20;
   const gutHalf = new Float32Array(bands);
   const gutZ0 = new Float32Array(bands);
   const gutZ1 = new Float32Array(bands);
+  const gutN = new Int16Array(bands);
   gutZ0.fill(1e3);
   gutZ1.fill(-1e3);
   group.traverse((obj) => {
@@ -486,15 +562,23 @@ function shapeGutToProfile(group: THREE.Object3D, cavity: THREE.Box3, navel: THR
       gutHalf[b] = Math.max(gutHalf[b]!, Math.abs(arr[i * 3]! - cx));
       gutZ0[b] = Math.min(gutZ0[b]!, arr[i * 3 + 2]!);
       gutZ1[b] = Math.max(gutZ1[b]!, arr[i * 3 + 2]!);
+      gutN[b]!++;
     }
   });
   for (let b = 0; b < bands; b++) {
-    if (gutHalf[b]! < 1e-4) gutHalf[b] = 0.08;
-    if (gutZ1[b]! < gutZ0[b]!) {
-      gutZ0[b] = cavity.min.z;
-      gutZ1[b] = cavity.max.z;
+    if (gutN[b]! < 8 || gutHalf[b]! < 0.025) {
+      const src = b > 0 && gutN[b - 1]! > 8 ? b - 1 : Math.min(bands - 1, b + 1);
+      gutHalf[b] = Math.max(gutHalf[b]!, gutHalf[src]!);
+      if (gutZ1[b]! < gutZ0[b]!) {
+        gutZ0[b] = gutZ0[src]!;
+        gutZ1[b] = gutZ1[src]!;
+      }
     }
   }
+  blurBands(gutHalf);
+  blurBands(gutHalf);
+  blurBands(gutZ0);
+  blurBands(gutZ1);
 
   group.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
@@ -507,23 +591,25 @@ function shapeGutToProfile(group: THREE.Object3D, cavity: THREE.Box3, navel: THR
       let x = arr[i3]!;
       const y = arr[i3 + 1]!;
       let z = arr[i3 + 2]!;
-      const b = Math.min(bands - 1, Math.max(0, Math.floor(((y - y0b) / spanb) * bands)));
+      const t = THREE.MathUtils.clamp((y - y0b) / spanb, 0, 1);
+      const gH = Math.max(0.03, sampleAt(gutHalf, t));
       const p = profileAt(profile, y);
-      const mid = 1 - Math.min(1, Math.abs(y - ny) / 0.13);
-      const above = THREE.MathUtils.clamp((y - (ny + 0.07)) / 0.08, 0, 1);
-      const below = THREE.MathUtils.clamp((ny - 0.1 - y) / 0.06, 0, 1);
-      const fill = 0.64 + mid * 0.1 - above * 0.16 - below * 0.06;
-      const targetHalf = Math.max(0.05, p.halfX * fill);
-      const sx = Math.min(1.15, targetHalf / Math.max(gutHalf[b]!, 1e-4));
+      const above = THREE.MathUtils.smoothstep(y, ny + 0.09, ny + 0.16);
+      const fill = 0.76 - above * 0.08;
+      const targetHalf = Math.max(0.055, p.halfX * fill);
+      let sx = targetHalf / gH;
+      sx = THREE.MathUtils.clamp(sx, 0.78, 1.7);
       x = cx + (x - cx) * sx;
-      if (x > cx + targetHalf) x = cx + targetHalf;
-      if (x < cx - targetHalf) x = cx - targetHalf;
-      const zFront = Math.min(cavity.max.z, p.zFront - 0.026 - above * 0.012);
-      const zBack = Math.max(cavity.min.z, p.zFront - 0.088);
-      const gz0 = gutZ0[b]!;
-      const gz1 = Math.max(gz0 + 1e-4, gutZ1[b]!);
-      const zt = (z - gz0) / (gz1 - gz0);
-      z = zBack + (zFront - zBack) * THREE.MathUtils.clamp(zt, 0, 1);
+      const lim = targetHalf * 1.06;
+      const ax = Math.abs(x - cx);
+      if (ax > lim) x = cx + Math.sign(x - cx) * (lim + (ax - lim) * 0.2);
+      const zFront = Math.min(cavity.max.z, p.zFront - 0.028);
+      const zBack = Math.max(cavity.min.z, p.zFront - 0.09);
+      const gz0 = sampleAt(gutZ0, t);
+      const gz1 = Math.max(gz0 + 1e-4, sampleAt(gutZ1, t));
+      const zt = THREE.MathUtils.clamp((z - gz0) / (gz1 - gz0), 0, 1);
+      const zFit = zBack + (zFront - zBack) * zt;
+      z = z * 0.2 + zFit * 0.8;
       arr[i3] = x;
       arr[i3 + 2] = z;
     }
@@ -533,24 +619,97 @@ function shapeGutToProfile(group: THREE.Object3D, cavity: THREE.Box3, navel: THR
   });
 }
 
-function placePelvisPack(source: THREE.Object3D, uterusTarget: THREE.Vector3, frontZ: number) {
+function shiftNamedMeshes(root: THREE.Object3D, re: RegExp, dx: number, dy: number, dz: number) {
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    if (!re.test(meshKey(mesh))) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos || !(pos.array instanceof Float32Array)) return;
+    const arr = pos.array;
+    for (let i = 0; i < pos.count; i++) {
+      arr[i * 3] += dx;
+      arr[i * 3 + 1] += dy;
+      arr[i * 3 + 2] += dz;
+    }
+    pos.needsUpdate = true;
+    mesh.geometry.computeBoundingBox();
+    mesh.geometry.computeBoundingSphere();
+  });
+}
+
+function scaleNamedMeshes(root: THREE.Object3D, re: RegExp, factor: number) {
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    if (!re.test(meshKey(mesh))) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos || !(pos.array instanceof Float32Array)) return;
+    const arr = pos.array;
+    let cx = 0;
+    let cy = 0;
+    let cz = 0;
+    for (let i = 0; i < pos.count; i++) {
+      cx += arr[i * 3]!;
+      cy += arr[i * 3 + 1]!;
+      cz += arr[i * 3 + 2]!;
+    }
+    const inv = 1 / Math.max(1, pos.count);
+    cx *= inv;
+    cy *= inv;
+    cz *= inv;
+    for (let i = 0; i < pos.count; i++) {
+      arr[i * 3] = cx + (arr[i * 3]! - cx) * factor;
+      arr[i * 3 + 1] = cy + (arr[i * 3 + 1]! - cy) * factor;
+      arr[i * 3 + 2] = cz + (arr[i * 3 + 2]! - cz) * factor;
+    }
+    pos.needsUpdate = true;
+    mesh.geometry.computeBoundingBox();
+    mesh.geometry.computeBoundingSphere();
+  });
+}
+
+function placePelvisPack(source: THREE.Object3D, crotch: THREE.Vector3, navel: THREE.Vector3, frontZ: number) {
   const root = cloneGraph(source);
-  hideExternalGenitals(root);
+  hideInternalBits(root);
   root.updateMatrixWorld(true);
   const uterusBox = collectNamedBox(root, /uterus/) ?? new THREE.Box3().setFromObject(root);
   const uSize = uterusBox.getSize(new THREE.Vector3());
-  root.scale.multiplyScalar(0.07 / Math.max(uSize.y, 1e-4));
+  root.scale.multiplyScalar(0.058 / Math.max(uSize.y, 1e-4));
   root.updateMatrixWorld(true);
   const u2 = collectNamedBox(root, /uterus/) ?? new THREE.Box3().setFromObject(root);
   const uc = u2.getCenter(new THREE.Vector3());
-  root.position.add(uterusTarget.clone().sub(uc));
+  root.position.add(new THREE.Vector3(0, navel.y - 0.1, navel.z - 0.055).sub(uc));
   root.updateMatrixWorld(true);
   const baked = flattenToWorld(root);
   bakeIntoVertices(baked);
-  const pb = new THREE.Box3().setFromObject(baked);
-  baked.position.x -= (pb.min.x + pb.max.x) * 0.5;
-  baked.position.z += frontZ - pb.max.z;
+  scaleNamedMeshes(baked, /uterus/, 1.02);
+  scaleNamedMeshes(baked, /vessie|bladder/, 0.7);
   bakeIntoVertices(baked);
+
+  const vulva = collectNamedBox(baked, /vulve|clitoris/);
+  if (vulva && !vulva.isEmpty()) {
+    const vx = (vulva.min.x + vulva.max.x) * 0.5;
+    const vy = vulva.min.y + (vulva.max.y - vulva.min.y) * 0.22;
+    const vz = vulva.max.z;
+    baked.position.x += crotch.x - vx;
+    baked.position.y += crotch.y - vy;
+    baked.position.z += crotch.z - 0.006 - vz;
+    bakeIntoVertices(baked);
+  } else {
+    const pb = new THREE.Box3().setFromObject(baked);
+    baked.position.x -= (pb.min.x + pb.max.x) * 0.5;
+    baked.position.z += frontZ - pb.max.z;
+    bakeIntoVertices(baked);
+  }
+  const internals = /uterus|vessie|bladder|ovaire|trompe|ligament|vagin/;
+  const ub = collectNamedBox(baked, /uterus/);
+  if (ub) {
+    const cz = (ub.min.z + ub.max.z) * 0.5;
+    const dy = navel.y - 0.08 - ub.max.y;
+    const dz = crotch.z - 0.05 - cz;
+    shiftNamedMeshes(baked, internals, 0, dy, dz);
+  }
   return baked;
 }
 
@@ -669,6 +828,8 @@ function FittedFigure({
   const lastShake = useRef(0);
   const lastReset = useRef(0);
   const energyTick = useRef(0);
+  const lastAz = useRef<number | null>(null);
+  const lastPol = useRef<number | null>(null);
   const { camera, gl, raycaster, pointer } = useThree();
 
   const setup = useMemo(() => {
@@ -686,8 +847,8 @@ function FittedFigure({
     const yNavel = navel.y;
     const yAb0 = yNavel - 0.08;
     const yAb1 = yNavel + 0.11;
-    const yX0 = yNavel - 0.18;
-    const yX1 = yNavel + 0.16;
+    const yX0 = yNavel - 0.2;
+    const yX1 = yNavel + 0.2;
 
     const abSample = sampleBand(body, yAb0, yAb1, 0.12);
     const abdomen =
@@ -702,21 +863,23 @@ function FittedFigure({
     abdomen.max.z = skinZ - 0.022;
     abdomen.min.z = skinZ - 0.092;
 
-    const gutBox = new THREE.Box3(
-      new THREE.Vector3(acx - 0.115, yNavel - 0.125, abdomen.min.z),
-      new THREE.Vector3(acx + 0.115, yNavel + 0.115, abdomen.max.z),
-    );
-    const waistProfile = sampleTorsoProfile(body, gutBox.min.y - 0.02, gutBox.max.y + 0.04);
-    const gut = placeGuts(intestines, gutBox, navel, waistProfile);
-    polishOrgans(gut, "gut");
-    gut.visible = false;
-    root.add(gut);
-
-    const uterusTarget = new THREE.Vector3(0, yNavel - 0.08, skinZ - 0.05);
-    const pelvic = placePelvisPack(pelvis, uterusTarget, skinZ - 0.028);
+    const crotch = findCrotch(body, height);
+    const pelvic = placePelvisPack(pelvis, crotch, navel, skinZ - 0.028);
     polishOrgans(pelvic, "pelvis");
     pelvic.visible = false;
     root.add(pelvic);
+    const uterusNow = collectNamedBox(pelvic, /uterus/);
+
+    const gutBox = new THREE.Box3(
+      new THREE.Vector3(acx - 0.12, yNavel - 0.135, abdomen.min.z),
+      new THREE.Vector3(acx + 0.12, yNavel + 0.155, abdomen.max.z),
+    );
+    const waistProfile = sampleTorsoProfile(body, gutBox.min.y - 0.02, gutBox.max.y + 0.05);
+    const gut = placeGuts(intestines, gutBox, navel, waistProfile);
+    polishOrgans(gut, "gut");
+    if (uterusNow) liftGutsOffUterus(gut, uterusNow);
+    gut.visible = false;
+    root.add(gut);
 
     const bellyLight = new THREE.PointLight("#a07060", 0, 0.48);
     bellyLight.position.set(0, yNavel, abdomen.max.z - 0.04);
@@ -812,9 +975,24 @@ function FittedFigure({
         char: { min: charBox.min.toArray(), max: charBox.max.toArray() },
         abdomen: { min: abdomen.min.toArray(), max: abdomen.max.toArray() },
         pelvis: { min: pelBoxNow.min.toArray(), max: pelBoxNow.max.toArray() },
+        uterusBox: (() => {
+          const b = collectNamedBox(pelvic, /uterus/);
+          return b ? { min: b.min.toArray(), max: b.max.toArray() } : null;
+        })(),
+        bladderBox: (() => {
+          const b = collectNamedBox(pelvic, /vessie|bladder/);
+          return b ? { min: b.min.toArray(), max: b.max.toArray() } : null;
+        })(),
+        vulvaBox: (() => {
+          const b = collectNamedBox(pelvic, /vulve|clitoris/);
+          return b ? { min: b.min.toArray(), max: b.max.toArray() } : null;
+        })(),
         guts: { min: gutBoxNow.min.toArray(), max: gutBoxNow.max.toArray() },
         navel: navel.toArray(),
-        uterus: uterusTarget.toArray(),
+        crotch: crotch.toArray(),
+        uterus: uterusNow
+          ? [(uterusNow.min.x + uterusNow.max.x) * 0.5, (uterusNow.min.y + uterusNow.max.y) * 0.5, (uterusNow.min.z + uterusNow.max.z) * 0.5]
+          : [0, yNavel - 0.1, 0],
         waist: waistProfile.map((s) => ({
           y: +s.y.toFixed(3),
           halfX: +s.halfX.toFixed(3),
@@ -908,6 +1086,20 @@ function FittedFigure({
     if (s.pose !== poseRef.current) {
       poseRef.current = s.pose;
       setup.skeleton.setPose(s.pose);
+    }
+
+    const ctrl = controlsRef.current;
+    if (ctrl) {
+      const az = ctrl.getAzimuthalAngle();
+      const pol = ctrl.getPolarAngle();
+      if (lastAz.current === null) {
+        lastAz.current = az;
+        lastPol.current = pol;
+      }
+      const invDt = 1 / Math.max(dt, 1e-4);
+      setup.skeleton.pushViewSpin((az - lastAz.current) * invDt, (pol - (lastPol.current ?? pol)) * invDt);
+      lastAz.current = az;
+      lastPol.current = pol;
     }
 
     if (grab.current?.active) {

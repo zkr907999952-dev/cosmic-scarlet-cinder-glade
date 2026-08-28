@@ -11,7 +11,6 @@ import {
   RotateCw,
   Scan,
   Wind,
-  Waves,
 } from "lucide-react";
 import * as Slider from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
@@ -63,7 +62,6 @@ export function Overlay() {
   const retryLoad = useStudio((s) => s.retryLoad);
   const applyPreset = useStudio((s) => s.applyPreset);
   const setParam = useStudio((s) => s.setParam);
-  const shake = useStudio((s) => s.shake);
   const resetSim = useStudio((s) => s.resetSim);
 
   useEffect(() => {
@@ -71,10 +69,6 @@ export function Overlay() {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       if (e.key === "r" || e.key === "R") resetSim();
-      if (e.key === " ") {
-        e.preventDefault();
-        shake();
-      }
       if (e.key === "b" || e.key === "B") setParam("breathing", !useStudio.getState().breathing);
       if (e.key === "h" || e.key === "H") setParam("uiHidden", !useStudio.getState().uiHidden);
       if (e.key === "t" || e.key === "T") {
@@ -107,7 +101,7 @@ export function Overlay() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [resetSim, shake, setParam, setInteractMode, setExpression, setPose]);
+  }, [resetSim, setParam, setInteractMode, setExpression, setPose]);
 
   const energyNorm = Math.min(1, energy * 8);
   const hideUi = () => setParam("uiHidden", true);
@@ -364,19 +358,11 @@ export function Overlay() {
           </button>
         </div>
 
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={shake}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-accent text-sm font-medium text-accent-fg transition-transform duration-quick ease-smooth-out active:scale-[0.98]"
-          >
-            <Waves className="size-4" />
-            晃动
-          </button>
+        <div className="mt-2">
           <button
             type="button"
             onClick={resetSim}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-surface-2 text-sm font-medium text-fg transition-transform duration-quick ease-smooth-out active:scale-[0.98]"
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border bg-surface-2 text-sm font-medium text-fg transition-transform duration-quick ease-smooth-out active:scale-[0.98]"
           >
             <RotateCcw className="size-4" />
             复位

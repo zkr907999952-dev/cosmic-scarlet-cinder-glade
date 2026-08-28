@@ -120,6 +120,12 @@ export class SoftSkeleton {
   private readonly exprOff: THREE.Vector3[] = [];
   private readonly off: THREE.Vector3[] = [];
   private hold: Hold | null = null;
+  private yawVel = 0;
+  private pitchVel = 0;
+  private yawF = 0;
+  private pitchF = 0;
+  private readonly brL = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };
+  private readonly brR = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };
   private readonly bindings: SkinBinding[] = [];
   private readonly headY: number;
   private readonly bustY: number;
@@ -403,6 +409,11 @@ export class SoftSkeleton {
     this.hold = null;
   }
 
+  pushViewSpin(yawVel: number, pitchVel: number) {
+    this.yawVel = THREE.MathUtils.clamp(yawVel, -12, 12);
+    this.pitchVel = THREE.MathUtils.clamp(pitchVel, -8, 8);
+  }
+
   commitPose() {
     for (let i = 0; i < this.count; i++) this.poseQ[i]!.copy(this.q[i]!);
   }
@@ -503,6 +514,9 @@ export class SoftSkeleton {
       b.delta.fill(0);
       b.dprev.fill(0);
     }
+    this.brL.x = this.brL.y = this.brL.z = this.brL.vx = this.brL.vy = this.brL.vz = 0;
+    this.brR.x = this.brR.y = this.brR.z = this.brR.vx = this.brR.vy = this.brR.vz = 0;
+    this.yawF = this.pitchF = this.yawVel = this.pitchVel = 0;
     this.hold = null;
     this.setPose(this.pose);
     this.setExpression(this.expression);
@@ -565,6 +579,7 @@ export class SoftSkeleton {
 
     this.updateFK();
     this.stepTissue(d, params);
+    this.stepBreasts(d, params);
     this.applyAll();
 
     let e = 0;
@@ -663,7 +678,7 @@ export class SoftSkeleton {
         const chest = smoother(Math.abs(y - by), 0.1) * smoother(Math.abs(Math.abs(x) - 0.07), 0.09);
         const front = THREE.MathUtils.clamp((z + 0.01) / 0.11, 0, 1);
         tz += breath * (0.55 * belly + 0.4 * chest) * front;
-        ty += breath * 0.15 * chest * front;
+        ty += breath * 0.08 * chest * front;
         if (grab) {
           const dx = x - grab.gx;
           const dy = y - grab.gy;
@@ -676,11 +691,11 @@ export class SoftSkeleton {
         let vx = (delta[i3]! - dprev[i3]!) * damp;
         let vy = (delta[i3 + 1]! - dprev[i3 + 1]!) * damp;
         let vz = (delta[i3 + 2]! - dprev[i3 + 2]!) * damp;
-        const chestMass = 0.35 + chest * 0.9;
-        vy += g * s * chestMass;
-        vx += (tx - delta[i3]!) * k * d * (0.55 + (1 - chest) * 0.45);
-        vy += (ty - delta[i3 + 1]!) * k * d * (0.55 + (1 - chest) * 0.45);
-        vz += (tz - delta[i3 + 2]!) * k * d * (0.55 + (1 - chest) * 0.45);
+        vy += g * s * belly * 0.2;
+        const bounce = 0.62 + chest * -0.08;
+        vx += (tx - delta[i3]!) * k * d * bounce;
+        vy += (ty - delta[i3 + 1]!) * k * d * bounce;
+        vz += (tz - delta[i3 + 2]!) * k * d * bounce;
         dprev[i3] = delta[i3]!;
         dprev[i3 + 1] = delta[i3 + 1]!;
         dprev[i3 + 2] = delta[i3 + 2]!;
@@ -697,6 +712,45 @@ export class SoftSkeleton {
         }
       }
     }
+  }
+
+  private stepBreasts(d: number, params: SkelParams) {
+    const follow = 1 - Math.exp(-8 * d);
+    const prevYaw = this.yawF;
+    const prevPitch = this.pitchF;
+    this.yawF += (this.yawVel - this.yawF) * follow;
+    this.pitchF += (this.pitchVel - this.pitchF) * follow;
+    const accY = THREE.MathUtils.clamp((this.yawF - prevYaw) / Math.max(d, 1e-4), -22, 22);
+    const accP = THREE.MathUtils.clamp((this.pitchF - prevPitch) / Math.max(d, 1e-4), -16, 16);
+    const omega = 9.2;
+    const zeta = 0.4;
+    const stiff = omega * omega;
+    const damp = 2 * zeta * omega;
+    const drive = 0.0095 * (0.5 + params.jiggle * 0.75);
+    const integrate = (m: { x: number; y: number; z: number; vx: number; vy: number; vz: number }) => {
+      const ax = -stiff * m.x - damp * m.vx - accY * drive;
+      const ay = -stiff * m.y - damp * m.vy + accP * drive * 0.55;
+      const az = -stiff * m.z - damp * m.vz + Math.abs(accY) * drive * 0.12;
+      m.vx += ax * d;
+      m.vy += ay * d;
+      m.vz += az * d;
+      m.x += m.vx * d;
+      m.y += m.vy * d;
+      m.z += m.vz * d;
+      const lim = 0.024;
+      const len = Math.hypot(m.x, m.y, m.z);
+      if (len > lim) {
+        const s = lim / len;
+        m.x *= s;
+        m.y *= s;
+        m.z *= s;
+        m.vx *= 0.72;
+        m.vy *= 0.72;
+        m.vz *= 0.72;
+      }
+    };
+    integrate(this.brL);
+    integrate(this.brR);
   }
 
   private updateFK() {
@@ -750,6 +804,16 @@ export class SoftSkeleton {
       positions[i3] = ox + delta[i3]!;
       positions[i3 + 1] = oy + delta[i3 + 1]!;
       positions[i3 + 2] = oz + delta[i3 + 2]!;
+      const chest =
+        smoother(Math.abs(ry - this.bustY), 0.1) *
+        smoother(Math.abs(Math.abs(rx) - 0.07), 0.09) *
+        THREE.MathUtils.clamp((rz + 0.01) / 0.11, 0, 1);
+      if (chest > 0.04) {
+        const br = rx < 0 ? this.brL : this.brR;
+        positions[i3] += br.x * chest;
+        positions[i3 + 1] += br.y * chest;
+        positions[i3 + 2] += br.z * chest;
+      }
     }
   }
 }
