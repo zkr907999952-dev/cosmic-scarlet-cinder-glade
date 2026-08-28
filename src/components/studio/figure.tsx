@@ -6,6 +6,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { SoftSkeleton } from "@/lib/softbody/soft-skeleton";
 import { GutPeristalsis } from "@/lib/softbody/peristalsis";
 import { BellyStrike } from "@/lib/softbody/belly-strike";
+import { GutHealth } from "@/lib/softbody/gut-health";
 import { useStudio } from "@/lib/studio-store";
 
 const _hit = new THREE.Vector3();
@@ -1053,6 +1054,9 @@ function FittedFigure({
     peristalsis.attach(gut);
     const strike = new BellyStrike();
     strike.attach(gut);
+    const gutHealth = new GutHealth();
+    gutHealth.attach(gut, peristalsis.getTubes());
+    root.add(gutHealth.bars);
     pelvic.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) bindMesh(mesh, "organs");
@@ -1130,6 +1134,7 @@ function FittedFigure({
       pelvisRoot: pelvic,
       peristalsis,
       strike,
+      gutHealth,
       navel,
       boundGeos,
       bellyLight,
@@ -1196,6 +1201,7 @@ function FittedFigure({
     if (s.resetNonce !== lastReset.current) {
       lastReset.current = s.resetNonce;
       setup.skeleton.reset();
+      setup.gutHealth.reset();
     }
     if (s.strikeNonce !== lastStrike.current) {
       lastStrike.current = s.strikeNonce;
@@ -1205,6 +1211,7 @@ function FittedFigure({
       const oz = p ? p[2] : setup.navel.z;
       setup.skeleton.impulse(ox, oy, oz, s.strikeForce, 0.08 + s.strikeRange * 0.1);
       setup.strike.fire(ox, oy, oz, s.strikeForce, s.strikeRange);
+      setup.gutHealth.hit(ox, oy, oz, s.strikeForce, s.strikeRange);
       if (s.abdomenXray < 0.2) {
         useStudio.setState({ abdomenXray: 0.78, showOrgans: true });
       }
@@ -1269,6 +1276,8 @@ function FittedFigure({
     }
     setup.strike.step(dt);
     setup.strike.apply();
+    setup.gutHealth.applyColor();
+    setup.gutHealth.updateBars(camera, s.showGutHp);
     const ring = ringRef.current;
     if (ring) {
       if (setup.strike.lastOrigin(_center)) {

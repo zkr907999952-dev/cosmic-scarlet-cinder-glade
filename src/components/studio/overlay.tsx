@@ -6,6 +6,7 @@ import {
   EyeOff,
   Grid3x3,
   Hand,
+  Heart,
   MousePointerClick,
   Pause,
   RotateCcw,
@@ -74,6 +75,7 @@ export function Overlay() {
   const setPose = useStudio((s) => s.setPose);
   const autoRotate = useStudio((s) => s.autoRotate);
   const showOrgans = useStudio((s) => s.showOrgans);
+  const showGutHp = useStudio((s) => s.showGutHp);
   const uiHidden = useStudio((s) => s.uiHidden);
   const abdomenXray = useStudio((s) => s.abdomenXray);
   const interactMode = useStudio((s) => s.interactMode);
@@ -334,6 +336,19 @@ export function Overlay() {
                   }}
                   icon={<Scan className="size-3.5" />}
                   label="透视"
+                />
+                <Toggle
+                  active={showGutHp}
+                  onClick={() => {
+                    const next = !showGutHp;
+                    setParam("showGutHp", next);
+                    if (next) {
+                      setParam("showOrgans", true);
+                      if (abdomenXray < 0.3) setParam("abdomenXray", 0.78);
+                    }
+                  }}
+                  icon={<Heart className="size-3.5" />}
+                  label="显示生命值"
                 />
               </div>
               <p className="mt-4 mb-1.5 text-xs text-muted">表情</p>

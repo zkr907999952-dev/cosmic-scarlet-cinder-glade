@@ -1,12 +1,5 @@
 import * as THREE from "three";
 
-type Tube = {
-  positions: Float32Array;
-  along: Float32Array;
-  rad: Float32Array;
-  count: number;
-};
-
 type Adj = { head: Int32Array; next: Int32Array; to: Int32Array; w: Float32Array };
 
 function addEdge(adj: Adj, slot: { n: number }, a: number, b: number, len: number) {
@@ -318,8 +311,19 @@ function pulse(along: number, time: number, amp: number, speed: number) {
   return shape * (0.16 + amp * 0.42);
 }
 
+export type TubeAlong = {
+  positions: Float32Array;
+  along: Float32Array;
+  rad: Float32Array;
+  count: number;
+};
+
 export class GutPeristalsis {
-  private tubes: Tube[] = [];
+  private tubes: TubeAlong[] = [];
+
+  getTubes() {
+    return this.tubes;
+  }
 
   attach(root: THREE.Object3D) {
     this.tubes.length = 0;

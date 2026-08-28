@@ -18,6 +18,7 @@ export type StudioParams = {
   autoRotate: boolean;
   abdomenXray: number;
   showOrgans: boolean;
+  showGutHp: boolean;
   gutAmp: number;
   gutSpeed: number;
   strikeForce: number;
@@ -45,6 +46,7 @@ export const PRESETS: Record<
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
+    showGutHp: false,
     gutAmp: 0.3,
     gutSpeed: 0.5,
     strikeForce: 0.78,
@@ -67,6 +69,7 @@ export const PRESETS: Record<
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
+    showGutHp: false,
     gutAmp: 0.3,
     gutSpeed: 0.5,
     strikeForce: 0.78,
@@ -89,6 +92,7 @@ export const PRESETS: Record<
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
+    showGutHp: false,
     gutAmp: 0.3,
     gutSpeed: 0.5,
     strikeForce: 0.78,
@@ -111,6 +115,7 @@ export const PRESETS: Record<
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
+    showGutHp: false,
     gutAmp: 0.3,
     gutSpeed: 0.5,
     strikeForce: 0.78,
@@ -177,6 +182,7 @@ export const useStudio = create<StudioState>((set) => ({
       preset: id,
       abdomenXray: s.abdomenXray,
       showOrgans: s.showOrgans,
+      showGutHp: s.showGutHp,
       gutAmp: s.gutAmp,
       gutSpeed: s.gutSpeed,
       strikeForce: s.strikeForce,
