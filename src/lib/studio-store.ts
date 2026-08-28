@@ -43,8 +43,8 @@ export const PRESETS: Record<
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
-    gutAmp: 0.72,
-    gutSpeed: 0.42,
+    gutAmp: 0.3,
+    gutSpeed: 0.5,
     uiHidden: false,
   },
   firm: {
@@ -63,8 +63,8 @@ export const PRESETS: Record<
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
-    gutAmp: 0.72,
-    gutSpeed: 0.42,
+    gutAmp: 0.3,
+    gutSpeed: 0.5,
     uiHidden: false,
   },
   jelly: {
@@ -83,8 +83,8 @@ export const PRESETS: Record<
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
-    gutAmp: 0.72,
-    gutSpeed: 0.42,
+    gutAmp: 0.3,
+    gutSpeed: 0.5,
     uiHidden: false,
   },
   athletic: {
@@ -103,8 +103,8 @@ export const PRESETS: Record<
     autoRotate: false,
     abdomenXray: 0,
     showOrgans: true,
-    gutAmp: 0.72,
-    gutSpeed: 0.42,
+    gutAmp: 0.3,
+    gutSpeed: 0.5,
     uiHidden: false,
   },
 };

@@ -1,15 +1,19 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
   Activity,
+  Crosshair,
   Eye,
   EyeOff,
   Grid3x3,
-  MousePointerClick,
   Hand,
+  MousePointerClick,
   Pause,
   RotateCcw,
   RotateCw,
   Scan,
+  Settings2,
+  Sword,
+  Wrench,
   Wind,
 } from "lucide-react";
 import * as Slider from "@radix-ui/react-slider";
@@ -38,8 +42,18 @@ const SLIDERS: {
   { id: "gutSpeed", label: "蠕动速度", min: 0, max: 1, step: 0.01 },
 ];
 
+type PanelId = "settings" | "interact" | "tools" | "weapons";
+
+const PANELS: { id: PanelId; label: string; icon: typeof Settings2 }[] = [
+  { id: "settings", label: "设置", icon: Settings2 },
+  { id: "interact", label: "互动", icon: Hand },
+  { id: "tools", label: "工具", icon: Wrench },
+  { id: "weapons", label: "武器", icon: Sword },
+];
+
 export function Overlay() {
   const [open, setOpen] = useState(false);
+  const [panel, setPanel] = useState<PanelId>("settings");
   const preset = useStudio((s) => s.preset);
   const energy = useStudio((s) => s.energy);
   const breathing = useStudio((s) => s.breathing);
@@ -200,175 +214,225 @@ export function Overlay() {
 
       <aside
         className={cn(
-          "pointer-events-auto absolute right-4 bottom-4 left-4 max-h-[46vh] overflow-y-auto rounded-xl border border-border bg-surface p-3 sm:right-6 sm:bottom-auto sm:left-auto sm:top-24 sm:max-h-[calc(100dvh-8rem)] sm:w-72 sm:p-4",
+          "pointer-events-auto absolute right-4 bottom-4 left-4 max-h-[52vh] overflow-hidden rounded-xl border border-border bg-surface sm:right-6 sm:bottom-auto sm:left-auto sm:top-24 sm:max-h-[calc(100dvh-8rem)] sm:w-80",
         )}
       >
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <p className="text-sm font-medium">物理参数</p>
-          <button
-            type="button"
-            className="text-xs text-muted sm:hidden"
-            onClick={() => setOpen((v) => !v)}
-          >
+        <div className="grid grid-cols-4 border-b border-border">
+          {PANELS.map((item) => {
+            const Icon = item.icon;
+            const on = panel === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setPanel(item.id);
+                  setOpen(true);
+                }}
+                className={cn(
+                  "inline-flex h-11 flex-col items-center justify-center gap-0.5 text-[10px] font-medium sm:h-12 sm:text-[11px]",
+                  on ? "bg-surface-2 text-fg" : "text-muted hover:text-fg",
+                )}
+              >
+                <Icon className="size-3.5" />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-between gap-2 px-3 pt-2 sm:hidden">
+          <p className="text-sm font-medium">{PANELS.find((p) => p.id === panel)?.label}</p>
+          <button type="button" className="text-xs text-muted" onClick={() => setOpen((v) => !v)}>
             {open ? "收起" : "展开"}
           </button>
         </div>
 
-        <div className={cn("sm:block", open ? "block" : "hidden")}>
-          <div className="mb-3 flex gap-1 overflow-x-auto sm:hidden">
-            {(Object.keys(PRESETS) as PresetId[]).map((id) => (
+        <div className={cn("overflow-y-auto p-3 sm:block sm:max-h-[calc(100dvh-12rem)] sm:p-4", open ? "block" : "hidden")}>
+          {panel === "settings" ? (
+            <>
+              <div className="mb-3 flex gap-1 overflow-x-auto">
+                {(Object.keys(PRESETS) as PresetId[]).map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => applyPreset(id)}
+                    className={cn(
+                      "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium",
+                      preset === id
+                        ? "border-accent bg-accent text-accent-fg"
+                        : "border-border bg-surface-2 text-muted",
+                    )}
+                  >
+                    {PRESETS[id].label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-col gap-3">
+                {SLIDERS.map((item) => (
+                  <SliderRow key={item.id} {...item} />
+                ))}
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Toggle
+                  active={breathing}
+                  onClick={() => setParam("breathing", !breathing)}
+                  icon={<Wind className="size-3.5" />}
+                  label="呼吸"
+                />
+                <Toggle
+                  active={slowMo}
+                  onClick={() => setParam("slowMo", !slowMo)}
+                  icon={<Pause className="size-3.5" />}
+                  label="慢动作"
+                />
+                <Toggle
+                  active={showLattice}
+                  onClick={() => setParam("showLattice", !showLattice)}
+                  icon={<Grid3x3 className="size-3.5" />}
+                  label="显示骨骼"
+                />
+                <Toggle
+                  active={showWeights}
+                  onClick={() => setParam("showWeights", !showWeights)}
+                  icon={<Scan className="size-3.5" />}
+                  label="显示绑定"
+                />
+                <Toggle
+                  active={autoRotate}
+                  onClick={() => setParam("autoRotate", !autoRotate)}
+                  icon={<RotateCw className="size-3.5" />}
+                  label="旋转"
+                />
+                <Toggle
+                  active={showOrgans}
+                  onClick={() => {
+                    const next = !showOrgans;
+                    setParam("showOrgans", next);
+                    if (next && abdomenXray < 0.3) setParam("abdomenXray", 0.78);
+                    if (!next) setParam("abdomenXray", 0);
+                  }}
+                  icon={<Scan className="size-3.5" />}
+                  label="脏器"
+                />
+                <Toggle
+                  active={abdomenXray > 0.4}
+                  onClick={() => {
+                    setParam("abdomenXray", abdomenXray > 0.4 ? 0 : 0.82);
+                    if (abdomenXray <= 0.4) setParam("showOrgans", true);
+                  }}
+                  icon={<Scan className="size-3.5" />}
+                  label="透视"
+                />
+              </div>
+              <p className="mt-4 mb-1.5 text-xs text-muted">表情</p>
+              <div className="grid grid-cols-4 gap-1">
+                {EXPRESSIONS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setExpression(item.id)}
+                    className={cn(
+                      "h-9 rounded-md border text-[11px] font-medium",
+                      expression === item.id
+                        ? "border-accent bg-accent text-accent-fg"
+                        : "border-border bg-surface-2 text-muted hover:text-fg",
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-3 mb-1.5 text-xs text-muted">动作</p>
+              <div className="grid grid-cols-3 gap-1">
+                {POSES.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setPose(item.id)}
+                    className={cn(
+                      "h-9 rounded-md border text-[11px] font-medium",
+                      pose === item.id
+                        ? "border-accent bg-accent text-accent-fg"
+                        : "border-border bg-surface-2 text-muted hover:text-fg",
+                    )}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+
+          {panel === "interact" ? (
+            <>
+              <p className="mb-3 text-xs leading-relaxed text-muted">
+                左键点身体操作。拖拽捏软组织，姿势拉关节松手后保持。
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setInteractMode("drag")}
+                  className={cn(
+                    "inline-flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors duration-fast",
+                    interactMode === "drag"
+                      ? "bg-accent text-accent-fg"
+                      : "border border-border bg-surface-2 text-muted hover:text-fg",
+                  )}
+                >
+                  <Hand className="size-4" />
+                  拖拽
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInteractMode("pose")}
+                  className={cn(
+                    "inline-flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors duration-fast",
+                    interactMode === "pose"
+                      ? "bg-accent text-accent-fg"
+                      : "border border-border bg-surface-2 text-muted hover:text-fg",
+                  )}
+                >
+                  <MousePointerClick className="size-4" />
+                  姿势
+                </button>
+              </div>
               <button
-                key={id}
                 type="button"
-                onClick={() => applyPreset(id)}
-                className={cn(
-                  "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium",
-                  preset === id
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-surface-2 text-muted",
-                )}
+                onClick={resetSim}
+                className="mt-2 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border bg-surface-2 text-sm font-medium text-fg transition-transform duration-quick ease-smooth-out active:scale-[0.98]"
               >
-                {PRESETS[id].label}
+                <RotateCcw className="size-4" />
+                复位
               </button>
-            ))}
-          </div>
+              <p className="mt-3 text-xs text-muted">{grabbing ? (interactMode === "pose" ? "调姿中" : "拖拽中") : "待机"}</p>
+            </>
+          ) : null}
 
-          <div className="flex flex-col gap-3">
-            {SLIDERS.map((item) => (
-              <SliderRow key={item.id} {...item} />
-            ))}
-          </div>
+          {panel === "tools" ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+              <Wrench className="size-6 text-muted" />
+              <p className="text-sm text-fg">工具</p>
+              <p className="text-xs text-muted">测量、截图等工具稍后加入</p>
+            </div>
+          ) : null}
 
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <Toggle
-              active={breathing}
-              onClick={() => setParam("breathing", !breathing)}
-              icon={<Wind className="size-3.5" />}
-              label="呼吸"
-            />
-            <Toggle
-              active={slowMo}
-              onClick={() => setParam("slowMo", !slowMo)}
-              icon={<Pause className="size-3.5" />}
-              label="慢动作"
-            />
-            <Toggle
-              active={showLattice}
-              onClick={() => setParam("showLattice", !showLattice)}
-              icon={<Grid3x3 className="size-3.5" />}
-              label="显示骨骼"
-            />
-            <Toggle
-              active={showWeights}
-              onClick={() => setParam("showWeights", !showWeights)}
-              icon={<Scan className="size-3.5" />}
-              label="显示绑定"
-            />
-            <Toggle
-              active={autoRotate}
-              onClick={() => setParam("autoRotate", !autoRotate)}
-              icon={<RotateCw className="size-3.5" />}
-              label="旋转"
-            />
-            <Toggle
-              active={showOrgans}
-              onClick={() => {
-                const next = !showOrgans;
-                setParam("showOrgans", next);
-                if (next && abdomenXray < 0.3) setParam("abdomenXray", 0.78);
-                if (!next) setParam("abdomenXray", 0);
-              }}
-              icon={<Scan className="size-3.5" />}
-              label="脏器"
-            />
-            <Toggle
-              active={abdomenXray > 0.4}
-              onClick={() => {
-                setParam("abdomenXray", abdomenXray > 0.4 ? 0 : 0.82);
-                if (abdomenXray <= 0.4) setParam("showOrgans", true);
-              }}
-              icon={<Scan className="size-3.5" />}
-              label="透视"
-            />
-          </div>
-
-          <p className="mt-4 mb-1.5 text-xs text-muted">表情</p>
-          <div className="grid grid-cols-4 gap-1">
-            {EXPRESSIONS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setExpression(item.id)}
-                className={cn(
-                  "h-9 rounded-md border text-[11px] font-medium",
-                  expression === item.id
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-surface-2 text-muted hover:text-fg",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          <p className="mt-3 mb-1.5 text-xs text-muted">动作</p>
-          <div className="grid grid-cols-3 gap-1 sm:grid-cols-3">
-            {POSES.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setPose(item.id)}
-                className={cn(
-                  "h-9 rounded-md border text-[11px] font-medium",
-                  pose === item.id
-                    ? "border-accent bg-accent text-accent-fg"
-                    : "border-border bg-surface-2 text-muted hover:text-fg",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setInteractMode("drag")}
-            className={cn(
-              "inline-flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors duration-fast",
-              interactMode === "drag"
-                ? "bg-accent text-accent-fg"
-                : "border border-border bg-surface-2 text-muted hover:text-fg",
-            )}
-          >
-            <Hand className="size-4" />
-            拖拽
-          </button>
-          <button
-            type="button"
-            onClick={() => setInteractMode("pose")}
-            className={cn(
-              "inline-flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors duration-fast",
-              interactMode === "pose"
-                ? "bg-accent text-accent-fg"
-                : "border border-border bg-surface-2 text-muted hover:text-fg",
-            )}
-          >
-            <MousePointerClick className="size-4" />
-            姿势
-          </button>
-        </div>
-
-        <div className="mt-2">
-          <button
-            type="button"
-            onClick={resetSim}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border bg-surface-2 text-sm font-medium text-fg transition-transform duration-quick ease-smooth-out active:scale-[0.98]"
-          >
-            <RotateCcw className="size-4" />
-            复位
-          </button>
+          {panel === "weapons" ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-muted">装备栏空</p>
+              <div className="grid grid-cols-3 gap-2">
+                {Array.from({ length: 6 }, (_, i) => (
+                  <div
+                    key={i}
+                    className="flex aspect-square items-center justify-center rounded-md border border-dashed border-border bg-surface-2/50 text-muted"
+                  >
+                    <Crosshair className="size-4 opacity-40" />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted">武器系统稍后加入</p>
+            </div>
+          ) : null}
         </div>
       </aside>
 

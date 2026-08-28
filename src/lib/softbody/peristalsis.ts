@@ -338,7 +338,7 @@ export class GutPeristalsis {
     });
   }
 
-  apply(time: number, amp = 0.72, speed = 0.42) {
+  apply(time: number, amp = 0.3, speed = 0.5) {
     const a = THREE.MathUtils.clamp(amp, 0, 1);
     const s = THREE.MathUtils.clamp(speed, 0, 1);
     for (const tube of this.tubes) {
