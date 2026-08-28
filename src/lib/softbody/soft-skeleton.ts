@@ -9,6 +9,7 @@ export type SkelParams = {
   time: number;
   breathing: boolean;
   rebound: number;
+  inflate: number;
 };
 
 export type ExpressionId = "rest" | "smile" | "surprise" | "open";
@@ -747,6 +748,25 @@ export class SoftSkeleton {
         const front = THREE.MathUtils.clamp((z + 0.01) / 0.11, 0, 1);
         tz += breath * (0.55 * belly + 0.4 * chest) * front;
         ty += breath * 0.08 * chest * front;
+        const inf = params.inflate;
+        if (Math.abs(inf) > 0.004) {
+          const yMask = smoother(Math.abs(y - ny), 0.2);
+          const xMask = smoother(Math.abs(x), 0.22);
+          const zMask = THREE.MathUtils.clamp((z + 0.04) / 0.14, 0, 1);
+          const mask = yMask * xMask * (0.28 + 0.72 * zMask);
+          if (mask > 0.01) {
+            if (inf > 0) {
+              tz += inf * 0.24 * mask;
+              tx += Math.sign(x) * inf * 0.15 * mask * Math.min(1, Math.abs(x) / 0.035);
+              ty -= inf * 0.045 * mask * zMask;
+            } else {
+              const c = -inf;
+              tx += -x * c * 0.9 * yMask * xMask;
+              tz -= c * 0.08 * mask;
+              ty += c * 0.02 * mask;
+            }
+          }
+        }
         if (this.dents.length) {
           for (const dent of this.dents) {
             const gain = this.dentGain(dent.t);
@@ -791,7 +811,7 @@ export class SoftSkeleton {
         delta[i3] = delta[i3]! + vx;
         delta[i3 + 1] = delta[i3 + 1]! + vy;
         delta[i3 + 2] = delta[i3 + 2]! + vz;
-        const lim = 0.12 + s * 0.04;
+        const lim = 0.12 + s * 0.04 + Math.abs(params.inflate) * 0.18;
         const len = Math.hypot(delta[i3]!, delta[i3 + 1]!, delta[i3 + 2]!);
         if (len > lim) {
           const m = lim / len;

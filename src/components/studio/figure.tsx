@@ -823,6 +823,40 @@ function placePelvisPack(source: THREE.Object3D, crotch: THREE.Vector3, navel: T
   return baked;
 }
 
+function inflateGuts(root: THREE.Object3D, navel: THREE.Vector3, inf: number) {
+  if (Math.abs(inf) < 0.004) return;
+  const ny = navel.y;
+  const nx = navel.x;
+  const nz = navel.z;
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos || !(pos.array instanceof Float32Array)) return;
+    const arr = pos.array;
+    for (let i = 0; i < pos.count; i++) {
+      const i3 = i * 3;
+      const x = arr[i3]!;
+      const y = arr[i3 + 1]!;
+      const z = arr[i3 + 2]!;
+      const yMask = 1 - THREE.MathUtils.smoothstep(Math.abs(y - ny), 0.02, 0.22);
+      const xMask = 1 - THREE.MathUtils.smoothstep(Math.abs(x - nx), 0.02, 0.16);
+      const mask = yMask * (0.35 + 0.65 * xMask);
+      if (mask < 0.02) continue;
+      if (inf > 0) {
+        arr[i3] = nx + (x - nx) * (1 + inf * 0.62 * mask);
+        arr[i3 + 1] = y - inf * 0.03 * mask;
+        arr[i3 + 2] = nz + (z - nz) * (1 + inf * 0.78 * mask) + inf * 0.055 * mask;
+      } else {
+        const c = -inf;
+        arr[i3] = nx + (x - nx) * (1 - c * 0.48 * mask);
+        arr[i3 + 2] = nz + (z - nz) * (1 - c * 0.32 * mask);
+      }
+    }
+    pos.needsUpdate = true;
+  });
+}
+
 function polishOrgans(root: THREE.Object3D, kind: "gut" | "pelvis") {
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
@@ -1265,10 +1299,12 @@ function FittedFigure({
       time: state.clock.elapsedTime,
       breathing: s.breathing,
       rebound: s.strikeRebound,
+      inflate: s.bellyInflate,
     });
     if (s.showOrgans && s.abdomenXray > 0.08) {
       setup.peristalsis.apply(state.clock.elapsedTime, s.gutAmp, s.gutSpeed);
     }
+    inflateGuts(setup.gutRoot, setup.navel, s.bellyInflate);
     setup.strike.step(dt);
     setup.strike.apply(s.strikeRebound);
     setup.gutHealth.applyColor();
@@ -1291,7 +1327,7 @@ function FittedFigure({
     energyTick.current += 1;
     writeBindings();
     if (energyTick.current % 8 === 0) s.setEnergy(setup.skeleton.energy);
-    if (!grab.current?.active && (setup.skeleton.hasDents ? energyTick.current % 2 === 0 : energyTick.current % 20 === 0)) {
+    if (!grab.current?.active && ((setup.skeleton.hasDents || Math.abs(s.bellyInflate) > 0.04) ? energyTick.current % 2 === 0 : energyTick.current % 20 === 0)) {
       for (const geo of setup.boundGeos) {
         const n = geo.getAttribute("position").count;
         if (n < 80000) geo.computeVertexNormals();
