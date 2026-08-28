@@ -120,6 +120,7 @@ export class SoftSkeleton {
   private readonly exprOff: THREE.Vector3[] = [];
   private readonly off: THREE.Vector3[] = [];
   private hold: Hold | null = null;
+  private dents: { x: number; y: number; z: number; t: number; force: number; range: number }[] = [];
   private yawVel = 0;
   private pitchVel = 0;
   private yawF = 0;
@@ -520,6 +521,7 @@ export class SoftSkeleton {
     this.brR.sx = this.brR.sy = this.brR.sz = this.brR.svx = this.brR.svy = this.brR.svz = 0;
     this.yawF = this.pitchF = this.yawVel = this.pitchVel = 0;
     this.hold = null;
+    this.dents.length = 0;
     this.setPose(this.pose);
     this.setExpression(this.expression);
     this.updateFK();
@@ -538,35 +540,39 @@ export class SoftSkeleton {
     }
   }
 
-  impulse(x: number, y: number, z: number, force: number, radius: number) {
-    const r2 = Math.max(1e-4, radius * radius);
-    const f = THREE.MathUtils.clamp(force, 0, 1.2);
+  impulse(x: number, y: number, z: number, force: number, range: number) {
+    const f = THREE.MathUtils.clamp(force, 0.08, 1.15);
+    const rg = THREE.MathUtils.clamp(range, 0.08, 1);
+    const sig = 0.04 + rg * 0.1;
+    const sig2 = sig * sig;
+    const depth = 0.032 + f * 0.078;
+    this.dents.push({ x, y, z, t: 0, force: f, range: rg });
+    if (this.dents.length > 3) this.dents.shift();
     for (const bind of this.bindings) {
       const { count, rest, softness, delta, dprev } = bind;
       for (let i = 0; i < count; i++) {
-        const s = softness[i]!;
-        if (s < 0.04) continue;
         const i3 = i * 3;
         const dx = rest[i3]! - x;
         const dy = rest[i3 + 1]! - y;
         const dz = rest[i3 + 2]! - z;
-        const d2 = dx * dx + dy * dy + dz * dz;
-        const w = Math.exp(-d2 / r2) * s;
-        if (w < 0.003) continue;
-        const inv = 1 / Math.max(1e-4, Math.sqrt(d2));
-        const kick = f * w;
-        delta[i3] += dx * inv * kick * 0.02;
-        delta[i3 + 1] += dy * inv * kick * 0.014;
-        delta[i3 + 2] -= kick * 0.048;
-        dprev[i3] += dx * inv * kick * 0.06;
-        dprev[i3 + 1] += dy * inv * kick * 0.045;
-        dprev[i3 + 2] -= kick * 0.14;
+        const r2 = dx * dx + dy * dy;
+        const crater = Math.exp(-r2 / sig2);
+        if (crater < 0.02) continue;
+        const front = THREE.MathUtils.clamp((rest[i3 + 2]! + 0.02) / 0.12, 0.15, 1);
+        const wall = THREE.MathUtils.clamp(softness[i]! * 2.8 + 0.4, 0.4, 1);
+        const sink = crater * depth * front * wall;
+        const inv = 1 / Math.max(1e-4, Math.hypot(dx, dy));
+        delta[i3] += dx * inv * sink * 0.35;
+        delta[i3 + 1] += dy * inv * sink * 0.28;
+        delta[i3 + 2] -= sink;
+        dprev[i3] += dx * inv * sink * 1.1;
+        dprev[i3 + 1] += dy * inv * sink * 0.85;
+        dprev[i3 + 2] -= sink * 2.4;
       }
     }
     for (let b = 0; b < this.count; b++) {
       if (this.names[b] !== "belly" && this.names[b] !== "spine1") continue;
-      this.qv[b]!.z += f * (this.names[b] === "belly" ? 1.1 : 0.35);
-      this.off[b]!.z -= f * 0.01;
+      this.qv[b]!.z += f * (this.names[b] === "belly" ? 2.4 : 0.7);
     }
   }
 
@@ -612,6 +618,7 @@ export class SoftSkeleton {
     }
 
     this.updateFK();
+    this.stepDents(d);
     this.stepTissue(d, params);
     this.stepBreasts(d, params);
     this.applyAll();
@@ -682,6 +689,22 @@ export class SoftSkeleton {
     }
   }
 
+  private stepDents(d: number) {
+    for (const dent of this.dents) dent.t += d;
+    this.dents = this.dents.filter((dent) => dent.t < 4.2);
+  }
+
+  private dentGain(t: number) {
+    if (t < 0.06) {
+      const u = t / 0.06;
+      return u * u;
+    }
+    if (t < 0.4) return 1;
+    const u = Math.min(1, (t - 0.4) / 3.5);
+    const s = 1 - u;
+    return s * s * s;
+  }
+
   private stepTissue(d: number, params: SkelParams) {
     const breath = params.breathing ? Math.sin(params.time * 1.55) * 0.011 : 0;
     const grab = this.hold?.kind === "tissue" ? this.hold : null;
@@ -713,6 +736,27 @@ export class SoftSkeleton {
         const front = THREE.MathUtils.clamp((z + 0.01) / 0.11, 0, 1);
         tz += breath * (0.55 * belly + 0.4 * chest) * front;
         ty += breath * 0.08 * chest * front;
+        if (this.dents.length) {
+          for (const dent of this.dents) {
+            const gain = this.dentGain(dent.t);
+            if (gain < 0.01) continue;
+            const dx = x - dent.x;
+            const dy = y - dent.y;
+            const r2 = dx * dx + dy * dy;
+            const sig = 0.04 + dent.range * 0.1;
+            const crater = Math.exp(-r2 / (sig * sig));
+            const r = Math.sqrt(r2);
+            const rim = Math.exp(-((r - sig * 1.12) / (sig * 0.42)) * ((r - sig * 1.12) / (sig * 0.42)));
+            const depth = (0.03 + dent.force * 0.08) * gain;
+            const wall = THREE.MathUtils.clamp(s * 2.6 + 0.45, 0.45, 1) * front;
+            const sink = crater * depth * wall;
+            tz -= sink;
+            tz += rim * depth * 0.22 * wall;
+            const inv = r < 1e-4 ? 0 : 1 / r;
+            tx += dx * inv * sink * 0.32;
+            ty += dy * inv * sink * 0.26;
+          }
+        }
         if (grab) {
           const dx = x - grab.gx;
           const dy = y - grab.gy;
@@ -736,7 +780,7 @@ export class SoftSkeleton {
         delta[i3] = delta[i3]! + vx;
         delta[i3 + 1] = delta[i3 + 1]! + vy;
         delta[i3 + 2] = delta[i3 + 2]! + vz;
-        const lim = 0.055 + s * 0.05;
+        const lim = 0.12 + s * 0.04;
         const len = Math.hypot(delta[i3]!, delta[i3 + 1]!, delta[i3 + 2]!);
         if (len > lim) {
           const m = lim / len;

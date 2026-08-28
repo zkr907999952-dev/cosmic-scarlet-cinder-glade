@@ -882,12 +882,12 @@ function attachXray(mesh: THREE.Mesh, y0: number, y1: number, xMax: number, zFro
            float front = smoothstep(uZFront - 0.07, uZFront - 0.02, vBodyW.z);
            float win = clamp(band * torso * uXray, 0.0, 1.0);
            float hole = win * front;
-           if (win > 0.25 && !gl_FrontFacing) {
-             gl_FragColor.rgb = vec3(0.16, 0.07, 0.06);
-             gl_FragColor.a = 1.0;
+           if (!gl_FrontFacing && uXray > 0.08) {
+             gl_FragColor.rgb = vec3(0.05, 0.025, 0.022);
+             gl_FragColor.a = mix(0.18, 0.06, win);
            } else {
-             gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * 0.8, hole);
-             gl_FragColor.a = mix(gl_FragColor.a, 0.11, hole);
+             gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * 0.22, hole);
+             gl_FragColor.a = mix(gl_FragColor.a, 0.06, hole);
            }
            #include <dithering_fragment>`,
         );
@@ -1209,7 +1209,7 @@ function FittedFigure({
       const ox = p ? p[0] : setup.navel.x;
       const oy = p ? p[1] : setup.navel.y;
       const oz = p ? p[2] : setup.navel.z;
-      setup.skeleton.impulse(ox, oy, oz, s.strikeForce, 0.08 + s.strikeRange * 0.1);
+      setup.skeleton.impulse(ox, oy, oz, s.strikeForce, s.strikeRange);
       setup.strike.fire(ox, oy, oz, s.strikeForce, s.strikeRange);
       setup.gutHealth.hit(ox, oy, oz, s.strikeForce, s.strikeRange);
       if (s.abdomenXray < 0.2) {
@@ -1313,7 +1313,7 @@ function FittedFigure({
     const show = s.showOrgans && xray > 0.08;
     setup.gutRoot.visible = show;
     setup.pelvisRoot.visible = show;
-    setup.bellyLight.intensity = show ? 0.18 + xray * 0.22 : 0;
+    setup.bellyLight.intensity = show ? 0.05 + xray * 0.06 : 0;
     if (show && energyTick.current % 6 === 0) {
       setup.gutRoot.traverse((obj) => {
         const mesh = obj as THREE.Mesh;

@@ -38,7 +38,7 @@ export class BellyStrike {
   step(dt: number) {
     const d = Math.min(dt, 0.05);
     for (const w of this.waves) w.t += d;
-    this.waves = this.waves.filter((w) => w.t < 1.7);
+    this.waves = this.waves.filter((w) => w.t < 3.4);
   }
 
   apply() {
@@ -54,19 +54,20 @@ export class BellyStrike {
           const dx = px - w.x;
           const dy = py - w.y;
           const r = Math.hypot(dx, dy);
-          const span = 0.07 + w.range * 0.14;
-          const ringR = w.t * (0.2 + w.range * 0.16);
-          const width = 0.028 + w.range * 0.022;
-          const life = Math.max(0, 1 - w.t / 1.55);
-          const fade = life * life;
+          const span = 0.055 + w.range * 0.13;
+          const ringR = w.t * (0.18 + w.range * 0.15);
+          const width = 0.03 + w.range * 0.024;
+          const life = Math.max(0, 1 - w.t / 3.2);
+          const fade = life * life * (3 - 2 * life);
           const ring = Math.exp(-((r - ringR) / width) * ((r - ringR) / width));
-          const hole = Math.exp(-(r * r) / (span * span * 0.45)) * Math.exp(-w.t * 2.4);
+          const hole = Math.exp(-(r * r) / (span * span * 0.55)) * Math.exp(-w.t * 0.4);
           const amp = w.force * fade;
           const inv = r < 1e-4 ? 0 : 1 / r;
-          const push = amp * (0.034 * ring + 0.028 * hole);
+          const push = amp * (0.03 * ring + 0.026 * hole);
+          const crush = amp * (0.062 * hole + 0.018 * ring);
           px += dx * inv * push;
-          py += dy * inv * push * 0.72;
-          pz -= amp * (0.012 * hole + 0.007 * ring);
+          py += dy * inv * push * 0.7;
+          pz -= crush;
         }
         positions[i3] = px;
         positions[i3 + 1] = py;
