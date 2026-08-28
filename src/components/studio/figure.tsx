@@ -5,6 +5,7 @@ import { SkeletonUtils } from "three-stdlib";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { SoftSkeleton } from "@/lib/softbody/soft-skeleton";
 import { GutPeristalsis } from "@/lib/softbody/peristalsis";
+import { BellyStrike } from "@/lib/softbody/belly-strike";
 import { useStudio } from "@/lib/studio-store";
 
 const _hit = new THREE.Vector3();
@@ -921,6 +922,10 @@ function FittedFigure({
   controlsRef: RefObject<OrbitControlsImpl | null>;
 }) {
   const pokeRef = useRef<THREE.Mesh>(null);
+  const ringRef = useRef<THREE.Mesh>(null);
+  const lastShake = useRef(0);
+  const lastReset = useRef(0);
+  const lastStrike = useRef(0);
   const latticeRef = useRef<THREE.Points>(null);
   const bonesRef = useRef<THREE.LineSegments>(null);
   const exprRef = useRef(useStudio.getState().expression);
@@ -933,8 +938,6 @@ function FittedFigure({
     normal: THREE.Vector3;
     bone: number;
   } | null>(null);
-  const lastShake = useRef(0);
-  const lastReset = useRef(0);
   const energyTick = useRef(0);
   const lastAz = useRef<number | null>(null);
   const lastPol = useRef<number | null>(null);
@@ -1048,6 +1051,8 @@ function FittedFigure({
     });
     const peristalsis = new GutPeristalsis();
     peristalsis.attach(gut);
+    const strike = new BellyStrike();
+    strike.attach(gut);
     pelvic.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) bindMesh(mesh, "organs");
@@ -1124,6 +1129,8 @@ function FittedFigure({
       gutRoot: gut,
       pelvisRoot: pelvic,
       peristalsis,
+      strike,
+      navel,
       boundGeos,
       bellyLight,
       weightViews,
@@ -1190,6 +1197,18 @@ function FittedFigure({
       lastReset.current = s.resetNonce;
       setup.skeleton.reset();
     }
+    if (s.strikeNonce !== lastStrike.current) {
+      lastStrike.current = s.strikeNonce;
+      const p = s.strikePoint;
+      const ox = p ? p[0] : setup.navel.x;
+      const oy = p ? p[1] : setup.navel.y;
+      const oz = p ? p[2] : setup.navel.z;
+      setup.skeleton.impulse(ox, oy, oz, s.strikeForce, 0.08 + s.strikeRange * 0.1);
+      setup.strike.fire(ox, oy, oz, s.strikeForce, s.strikeRange);
+      if (s.abdomenXray < 0.2) {
+        useStudio.setState({ abdomenXray: 0.78, showOrgans: true });
+      }
+    }
     if (s.expression !== exprRef.current) {
       exprRef.current = s.expression;
       setup.skeleton.setExpression(s.expression);
@@ -1247,6 +1266,22 @@ function FittedFigure({
     });
     if (s.showOrgans && s.abdomenXray > 0.08) {
       setup.peristalsis.apply(state.clock.elapsedTime, s.gutAmp, s.gutSpeed);
+    }
+    setup.strike.step(dt);
+    setup.strike.apply();
+    const ring = ringRef.current;
+    if (ring) {
+      if (setup.strike.lastOrigin(_center)) {
+        ring.position.copy(_center);
+        ring.position.z += 0.012;
+        const rr = Math.max(0.02, setup.strike.ringRadius());
+        ring.scale.set(rr, rr, 1);
+        const mat = ring.material as THREE.MeshBasicMaterial;
+        mat.opacity = setup.strike.ringOpacity();
+        ring.visible = mat.opacity > 0.02;
+      } else {
+        ring.visible = false;
+      }
     }
 
     energyTick.current += 1;
@@ -1331,12 +1366,17 @@ function FittedFigure({
     if (e.button !== 0 && e.nativeEvent.button !== 0) return;
     e.stopPropagation();
     _hit.copy(e.point);
+    const mode = useStudio.getState().interactMode;
+    if (mode === "strike") {
+      useStudio.getState().fireStrike([_hit.x, _hit.y, _hit.z]);
+      return;
+    }
     if (e.face) {
       _normal.copy(e.face.normal).transformDirection(e.object.matrixWorld).normalize();
     } else {
       _normal.set(0, 0, 1);
     }
-    beginGrab(_hit, _normal, useStudio.getState().interactMode);
+    beginGrab(_hit, _normal, mode === "pose" ? "pose" : "drag");
   };
 
   const midY = (setup.y0 + setup.y1) * 0.5;
@@ -1348,7 +1388,7 @@ function FittedFigure({
         object={setup.root}
         onPointerDown={onPointerDown}
         onPointerOver={() => {
-          gl.domElement.style.cursor = "grab";
+          gl.domElement.style.cursor = useStudio.getState().interactMode === "strike" ? "crosshair" : "grab";
         }}
         onPointerOut={() => {
           if (!grab.current) gl.domElement.style.cursor = "default";
@@ -1358,7 +1398,7 @@ function FittedFigure({
         position={[0, midY, ab.max.z + 0.01]}
         onPointerDown={onPointerDown}
         onPointerOver={() => {
-          gl.domElement.style.cursor = "grab";
+          gl.domElement.style.cursor = useStudio.getState().interactMode === "strike" ? "crosshair" : "grab";
         }}
         onPointerOut={() => {
           if (!grab.current) gl.domElement.style.cursor = "default";
@@ -1376,6 +1416,10 @@ function FittedFigure({
       <mesh ref={pokeRef} visible={false} renderOrder={10}>
         <ringGeometry args={[0.024, 0.036, 28]} />
         <meshBasicMaterial color="#d4b5a0" transparent opacity={0.8} side={THREE.DoubleSide} depthTest={false} />
+      </mesh>
+      <mesh ref={ringRef} visible={false} renderOrder={12}>
+        <ringGeometry args={[0.92, 1, 48]} />
+        <meshBasicMaterial color="#f2efe9" transparent opacity={0} side={THREE.DoubleSide} depthTest={false} />
       </mesh>
     </group>
   );

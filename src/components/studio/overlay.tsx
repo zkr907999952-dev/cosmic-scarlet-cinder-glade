@@ -15,6 +15,7 @@ import {
   Sword,
   Wrench,
   Wind,
+  Zap,
 } from "lucide-react";
 import * as Slider from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,13 @@ const PANELS: { id: PanelId; label: string; icon: typeof Settings2 }[] = [
   { id: "weapons", label: "武器", icon: Sword },
 ];
 
+const STRIKE_LEVELS: { id: string; label: string; force: number }[] = [
+  { id: "light", label: "轻", force: 0.28 },
+  { id: "mid", label: "中", force: 0.52 },
+  { id: "heavy", label: "重", force: 0.78 },
+  { id: "max", label: "极重", force: 1 },
+];
+
 export function Overlay() {
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<PanelId>("settings");
@@ -79,6 +87,9 @@ export function Overlay() {
   const applyPreset = useStudio((s) => s.applyPreset);
   const setParam = useStudio((s) => s.setParam);
   const resetSim = useStudio((s) => s.resetSim);
+  const fireStrike = useStudio((s) => s.fireStrike);
+  const strikeForce = useStudio((s) => s.strikeForce);
+  const strikeRange = useStudio((s) => s.strikeRange);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -89,7 +100,7 @@ export function Overlay() {
       if (e.key === "h" || e.key === "H") setParam("uiHidden", !useStudio.getState().uiHidden);
       if (e.key === "t" || e.key === "T") {
         const cur = useStudio.getState().interactMode;
-        setInteractMode(cur === "drag" ? "pose" : "drag");
+        setInteractMode(cur === "drag" ? "pose" : cur === "pose" ? "strike" : "drag");
       }
       if (e.key === "x" || e.key === "X") {
         const cur = useStudio.getState().abdomenXray;
@@ -367,14 +378,14 @@ export function Overlay() {
           {panel === "interact" ? (
             <>
               <p className="mb-3 text-xs leading-relaxed text-muted">
-                左键点身体操作。拖拽捏软组织，姿势拉关节松手后保持。
+                左键点身体操作。拖拽捏软组织，姿势拉关节，击腹点击释放环状冲击。
               </p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setInteractMode("drag")}
                   className={cn(
-                    "inline-flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors duration-fast",
+                    "inline-flex h-11 items-center justify-center gap-1.5 rounded-md text-sm font-medium transition-colors duration-fast",
                     interactMode === "drag"
                       ? "bg-accent text-accent-fg"
                       : "border border-border bg-surface-2 text-muted hover:text-fg",
@@ -387,7 +398,7 @@ export function Overlay() {
                   type="button"
                   onClick={() => setInteractMode("pose")}
                   className={cn(
-                    "inline-flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors duration-fast",
+                    "inline-flex h-11 items-center justify-center gap-1.5 rounded-md text-sm font-medium transition-colors duration-fast",
                     interactMode === "pose"
                       ? "bg-accent text-accent-fg"
                       : "border border-border bg-surface-2 text-muted hover:text-fg",
@@ -396,7 +407,96 @@ export function Overlay() {
                   <MousePointerClick className="size-4" />
                   姿势
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setInteractMode("strike")}
+                  className={cn(
+                    "inline-flex h-11 items-center justify-center gap-1.5 rounded-md text-sm font-medium transition-colors duration-fast",
+                    interactMode === "strike"
+                      ? "bg-accent text-accent-fg"
+                      : "border border-border bg-surface-2 text-muted hover:text-fg",
+                  )}
+                >
+                  <Zap className="size-4" />
+                  击腹
+                </button>
               </div>
+
+              {interactMode === "strike" ? (
+                <div className="mt-3">
+                  <p className="mb-1.5 text-xs text-muted">力度档位</p>
+                  <div className="grid grid-cols-4 gap-1">
+                    {STRIKE_LEVELS.map((lv) => (
+                      <button
+                        key={lv.id}
+                        type="button"
+                        onClick={() => setParam("strikeForce", lv.force)}
+                        className={cn(
+                          "h-9 rounded-md border text-[11px] font-medium",
+                          Math.abs(strikeForce - lv.force) < 0.06
+                            ? "border-accent bg-accent text-accent-fg"
+                            : "border-border bg-surface-2 text-muted hover:text-fg",
+                        )}
+                      >
+                        {lv.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex flex-col gap-3">
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+                        <span>力度</span>
+                        <span className="tabular-nums text-fg">{strikeForce.toFixed(2)}</span>
+                      </span>
+                      <Slider.Root
+                        value={[strikeForce]}
+                        min={0.1}
+                        max={1}
+                        step={0.01}
+                        onValueChange={([v]) => {
+                          if (typeof v === "number") setParam("strikeForce", v);
+                        }}
+                        className="relative flex h-5 w-full touch-none items-center"
+                      >
+                        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2">
+                          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                        </Slider.Track>
+                        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+                      </Slider.Root>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+                        <span>范围</span>
+                        <span className="tabular-nums text-fg">{strikeRange.toFixed(2)}</span>
+                      </span>
+                      <Slider.Root
+                        value={[strikeRange]}
+                        min={0.1}
+                        max={1}
+                        step={0.01}
+                        onValueChange={([v]) => {
+                          if (typeof v === "number") setParam("strikeRange", v);
+                        }}
+                        className="relative flex h-5 w-full touch-none items-center"
+                      >
+                        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2">
+                          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                        </Slider.Track>
+                        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+                      </Slider.Root>
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => fireStrike(null)}
+                    className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-md bg-accent text-sm font-medium text-accent-fg transition-transform duration-quick ease-smooth-out active:scale-[0.98]"
+                  >
+                    <Zap className="size-4" />
+                    释放冲击
+                  </button>
+                </div>
+              ) : null}
+
               <button
                 type="button"
                 onClick={resetSim}
@@ -405,7 +505,15 @@ export function Overlay() {
                 <RotateCcw className="size-4" />
                 复位
               </button>
-              <p className="mt-3 text-xs text-muted">{grabbing ? (interactMode === "pose" ? "调姿中" : "拖拽中") : "待机"}</p>
+              <p className="mt-3 text-xs text-muted">
+                {grabbing
+                  ? interactMode === "pose"
+                    ? "调姿中"
+                    : "拖拽中"
+                  : interactMode === "strike"
+                    ? "击腹就绪"
+                    : "待机"}
+              </p>
             </>
           ) : null}
 
@@ -438,7 +546,7 @@ export function Overlay() {
 
       <div className="pointer-events-none absolute bottom-auto left-4 hidden items-center gap-2 text-xs text-muted sm:bottom-6 sm:flex">
         <Hand className="size-3.5" />
-        <span>{interactMode === "pose" ? "姿势" : "拖拽"}</span>
+        <span>{interactMode === "pose" ? "姿势" : interactMode === "strike" ? "击腹" : "拖拽"}</span>
         <span className="text-border">/</span>
         <Activity className="size-3.5" />
         <span>右键旋转 · 左键点身体操作 · T 拖拽/姿势 · X 透视 · K 骨骼 · W 绑定</span>

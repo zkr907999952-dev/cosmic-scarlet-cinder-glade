@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { ExpressionId, PoseId } from "@/lib/softbody/soft-skeleton";
 
 export type PresetId = "soft" | "firm" | "jelly" | "athletic";
-export type InteractMode = "drag" | "pose";
+export type InteractMode = "drag" | "pose" | "strike";
 
 export type StudioParams = {
   stiffness: number;
@@ -20,6 +20,8 @@ export type StudioParams = {
   showOrgans: boolean;
   gutAmp: number;
   gutSpeed: number;
+  strikeForce: number;
+  strikeRange: number;
   uiHidden: boolean;
 };
 
@@ -45,6 +47,8 @@ export const PRESETS: Record<
     showOrgans: true,
     gutAmp: 0.3,
     gutSpeed: 0.5,
+    strikeForce: 0.78,
+    strikeRange: 0.55,
     uiHidden: false,
   },
   firm: {
@@ -65,6 +69,8 @@ export const PRESETS: Record<
     showOrgans: true,
     gutAmp: 0.3,
     gutSpeed: 0.5,
+    strikeForce: 0.78,
+    strikeRange: 0.55,
     uiHidden: false,
   },
   jelly: {
@@ -85,6 +91,8 @@ export const PRESETS: Record<
     showOrgans: true,
     gutAmp: 0.3,
     gutSpeed: 0.5,
+    strikeForce: 0.78,
+    strikeRange: 0.55,
     uiHidden: false,
   },
   athletic: {
@@ -105,6 +113,8 @@ export const PRESETS: Record<
     showOrgans: true,
     gutAmp: 0.3,
     gutSpeed: 0.5,
+    strikeForce: 0.78,
+    strikeRange: 0.55,
     uiHidden: false,
   },
 };
@@ -118,6 +128,8 @@ type StudioState = StudioParams & {
   grabbing: boolean;
   shakeNonce: number;
   resetNonce: number;
+  strikeNonce: number;
+  strikePoint: [number, number, number] | null;
   loading: boolean;
   loadProgress: number;
   loadHint: string;
@@ -131,6 +143,7 @@ type StudioState = StudioParams & {
   setEnergy: (v: number) => void;
   setGrabbing: (v: boolean) => void;
   shake: () => void;
+  fireStrike: (point?: [number, number, number] | null) => void;
   resetSim: () => void;
   retryLoad: () => void;
 };
@@ -145,6 +158,8 @@ export const useStudio = create<StudioState>((set) => ({
   grabbing: false,
   shakeNonce: 0,
   resetNonce: 0,
+  strikeNonce: 0,
+  strikePoint: null,
   loading: true,
   loadProgress: 0,
   loadHint: "准备下载",
@@ -164,6 +179,8 @@ export const useStudio = create<StudioState>((set) => ({
       showOrgans: s.showOrgans,
       gutAmp: s.gutAmp,
       gutSpeed: s.gutSpeed,
+      strikeForce: s.strikeForce,
+      strikeRange: s.strikeRange,
       showLattice: s.showLattice,
       showWeights: s.showWeights,
       uiHidden: s.uiHidden,
@@ -177,6 +194,8 @@ export const useStudio = create<StudioState>((set) => ({
   setEnergy: (energy) => set({ energy }),
   setGrabbing: (grabbing) => set({ grabbing }),
   shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),
+  fireStrike: (point = null) =>
+    set((s) => ({ strikeNonce: s.strikeNonce + 1, strikePoint: point ?? null })),
   resetSim: () => set((s) => ({ resetNonce: s.resetNonce + 1, energy: 0 })),
   retryLoad: () =>
     set((s) => ({

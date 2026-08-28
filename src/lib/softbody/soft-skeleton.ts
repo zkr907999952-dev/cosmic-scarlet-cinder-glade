@@ -538,6 +538,38 @@ export class SoftSkeleton {
     }
   }
 
+  impulse(x: number, y: number, z: number, force: number, radius: number) {
+    const r2 = Math.max(1e-4, radius * radius);
+    const f = THREE.MathUtils.clamp(force, 0, 1.2);
+    for (const bind of this.bindings) {
+      const { count, rest, softness, delta, dprev } = bind;
+      for (let i = 0; i < count; i++) {
+        const s = softness[i]!;
+        if (s < 0.04) continue;
+        const i3 = i * 3;
+        const dx = rest[i3]! - x;
+        const dy = rest[i3 + 1]! - y;
+        const dz = rest[i3 + 2]! - z;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        const w = Math.exp(-d2 / r2) * s;
+        if (w < 0.003) continue;
+        const inv = 1 / Math.max(1e-4, Math.sqrt(d2));
+        const kick = f * w;
+        delta[i3] += dx * inv * kick * 0.02;
+        delta[i3 + 1] += dy * inv * kick * 0.014;
+        delta[i3 + 2] -= kick * 0.048;
+        dprev[i3] += dx * inv * kick * 0.06;
+        dprev[i3 + 1] += dy * inv * kick * 0.045;
+        dprev[i3 + 2] -= kick * 0.14;
+      }
+    }
+    for (let b = 0; b < this.count; b++) {
+      if (this.names[b] !== "belly" && this.names[b] !== "spine1") continue;
+      this.qv[b]!.z += f * (this.names[b] === "belly" ? 1.1 : 0.35);
+      this.off[b]!.z -= f * 0.01;
+    }
+  }
+
   step(dt: number, params: SkelParams) {
     const d = Math.min(dt, 0.04);
     this.applyHoldPose();
