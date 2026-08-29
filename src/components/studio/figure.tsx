@@ -1364,6 +1364,7 @@ function FittedFigure({
     inflateGuts(setup.gutRoot, setup.navel, s.bellyInflate);
     setup.strike.step(dt);
     setup.strike.apply(s.strikeRebound);
+    setup.fist.setMaxScale(s.fistMaxDepth);
     setup.fist.apply(s.fistGut);
     setup.gutHealth.applyColor();
     setup.gutHealth.updateBars(camera, s.showGutHp);

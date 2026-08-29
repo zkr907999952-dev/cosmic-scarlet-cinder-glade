@@ -27,7 +27,7 @@ import { EXPRESSIONS, POSES } from "@/lib/softbody/soft-skeleton";
 const SLIDERS: {
   id: keyof Pick<
     StudioParams,
-    "stiffness" | "damping" | "gravity" | "pressure" | "jiggle" | "wind" | "abdomenXray" | "bellyInflate" | "gutAmp" | "gutSpeed" | "fistBulge" | "fistSpread" | "fistGut" | "fistLever"
+    "stiffness" | "damping" | "gravity" | "pressure" | "jiggle" | "wind" | "abdomenXray" | "bellyInflate" | "gutAmp" | "gutSpeed" | "fistBulge" | "fistSpread" | "fistGut" | "fistLever" | "fistMaxDepth"
   >;
   label: string;
   min: number;
@@ -48,6 +48,7 @@ const SLIDERS: {
   { id: "fistSpread", label: "鼓起范围", min: 0.2, max: 2, step: 0.01 },
   { id: "fistGut", label: "肠子撑开", min: 0, max: 2, step: 0.01 },
   { id: "fistLever", label: "杠杆搅动", min: 0, max: 2, step: 0.01 },
+  { id: "fistMaxDepth", label: "最大插入深度", min: 0.5, max: 1.5, step: 0.01 },
 ];
 
 type PanelId = "settings" | "interact" | "tools" | "weapons";
@@ -99,6 +100,7 @@ export function Overlay() {
   const strikeForce = useStudio((s) => s.strikeForce);
   const strikeRange = useStudio((s) => s.strikeRange);
   const strikeRebound = useStudio((s) => s.strikeRebound);
+  const fistMaxDepth = useStudio((s) => s.fistMaxDepth);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -458,9 +460,32 @@ export function Overlay() {
               </div>
 
               {interactMode === "fist" ? (
-                <p className="mt-3 text-xs leading-relaxed text-muted">
-                  左键拖拳头。肛门是支点，体外的手臂会跟着转，手臂本身是刚体不会弯折。
-                </p>
+                <div className="mt-3">
+                  <p className="text-xs leading-relaxed text-muted">
+                    左键拖拳头。肛门是支点，体外的手臂会跟着转，手臂本身是刚体不会弯折。
+                  </p>
+                  <label className="mt-3 block">
+                    <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+                      <span>最大插入深度</span>
+                      <span className="tabular-nums text-fg">{fistMaxDepth.toFixed(2)}</span>
+                    </span>
+                    <Slider.Root
+                      value={[fistMaxDepth]}
+                      min={0.5}
+                      max={1.5}
+                      step={0.01}
+                      onValueChange={([v]) => {
+                        if (typeof v === "number") setParam("fistMaxDepth", v);
+                      }}
+                      className="relative flex h-5 w-full touch-none items-center"
+                    >
+                      <Slider.Track className="relative h-1 grow rounded-full bg-surface-2">
+                        <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                      </Slider.Track>
+                      <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+                    </Slider.Root>
+                  </label>
+                </div>
               ) : null}
 
               {interactMode === "strike" ? (

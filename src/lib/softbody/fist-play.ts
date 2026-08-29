@@ -21,6 +21,7 @@ export class FistPlay {
   private armLen = 0.38;
   private yMin = 0.7;
   private yMax = 1.15;
+  private maxScale = 1;
   private slices: { y: number; halfX: number }[] = [];
 
   attach(arm: THREE.Object3D, tubes: TubeAlong[], rectumHint: THREE.Vector3) {
@@ -49,6 +50,15 @@ export class FistPlay {
     this.layoutArm();
   }
 
+  setMaxScale(scale: number) {
+    this.maxScale = THREE.MathUtils.clamp(scale, 0.5, 1.5);
+    this.depth = Math.min(this.depth, this.reach());
+  }
+
+  private reach() {
+    return this.armLen * 0.86 * this.maxScale;
+  }
+
   reset() {
     this.depth = 0.018;
     this.dir.copy(this.entry);
@@ -74,18 +84,18 @@ export class FistPlay {
     if (len < 1e-5) return;
     if (inward > 0.004) {
       this.dir.copy(_v).normalize();
-      if (this.dir.z < 0.06) {
-        this.dir.z = 0.06;
+      if (this.dir.z < 0.2) {
+        this.dir.z = 0.2;
         this.dir.normalize();
       }
-      this.depth = THREE.MathUtils.clamp(len, 0.012, this.armLen * 0.86);
+      this.depth = THREE.MathUtils.clamp(len, 0.012, this.reach());
     } else {
       this.depth = Math.max(0.012, this.depth + inward);
       _n.copy(_v).addScaledVector(this.entry, -inward);
       if (_n.lengthSq() > 1e-8) {
         this.dir.addScaledVector(_n.normalize(), 0.28).normalize();
-        if (this.dir.z < 0.06) {
-          this.dir.z = 0.06;
+        if (this.dir.z < 0.2) {
+          this.dir.z = 0.2;
           this.dir.normalize();
         }
       }
@@ -110,25 +120,23 @@ export class FistPlay {
   }
 
   private clampLateral() {
-    if (this.dir.z < 0.08) {
-      this.dir.z = 0.08;
+    if (this.dir.z < 0.2) {
+      this.dir.z = 0.2;
       this.dir.normalize();
     }
-    const fx = this.anus.x + this.dir.x * this.depth;
-    const fy = this.anus.y + this.dir.y * this.depth;
-    const fz = Math.max(this.anus.z - 0.004, this.anus.z + this.dir.z * this.depth);
-    const y = THREE.MathUtils.clamp(fy, this.yMin, this.yMax);
-    const half = Math.max(0.03, this.halfXAt(y) * 0.78);
-    const x = THREE.MathUtils.clamp(fx, -half, half);
-    _v.set(x - this.anus.x, y - this.anus.y, fz - this.anus.z);
+    const fy = THREE.MathUtils.clamp(this.anus.y + this.dir.y * this.depth, this.yMin, this.yMax);
+    const half = Math.max(0.03, this.halfXAt(fy) * 0.72);
+    const fx = THREE.MathUtils.clamp(this.anus.x + this.dir.x * this.depth, -half, half);
+    const fz = Math.max(this.anus.z + 0.01, this.anus.z + this.dir.z * this.depth);
+    _v.set(fx - this.anus.x, fy - this.anus.y, fz - this.anus.z);
     const len = _v.length();
     if (len < 1e-5) return;
     this.dir.copy(_v).normalize();
-    if (this.dir.z < 0.08) {
-      this.dir.z = 0.08;
+    if (this.dir.z < 0.2) {
+      this.dir.z = 0.2;
       this.dir.normalize();
     }
-    this.depth = THREE.MathUtils.clamp(len, 0.012, this.armLen * 0.86);
+    this.depth = THREE.MathUtils.clamp(len, 0.012, this.reach());
   }
 
   apply(gut = 1) {
