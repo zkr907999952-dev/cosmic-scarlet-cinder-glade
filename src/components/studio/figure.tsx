@@ -97,9 +97,27 @@ function findCrotch(body: THREE.Object3D, height: number) {
 }
 
 function findAnus(body: THREE.Object3D, height: number, crotch: THREE.Vector3) {
-  const y0 = crotch.y - 0.04;
-  const y1 = crotch.y + 0.012;
-  const best = new THREE.Vector3(0, crotch.y - 0.02, crotch.z - 0.07);
+  const yTarget = crotch.y - 0.01;
+  const y0 = yTarget - 0.03;
+  const y1 = yTarget + 0.022;
+  let zMin = crotch.z;
+  body.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    if (!isTorsoMesh(mesh) && !/skin|dress/.test(meshKey(mesh))) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    const step = Math.max(1, Math.floor(pos.count / 9000));
+    for (let i = 0; i < pos.count; i += step) {
+      _local.fromBufferAttribute(pos, i);
+      mesh.localToWorld(_local);
+      if (_local.y < y0 || _local.y > y1) continue;
+      if (Math.abs(_local.x) > 0.018) continue;
+      if (_local.z < zMin) zMin = _local.z;
+    }
+  });
+  const zTarget = zMin + 0.042;
+  const best = new THREE.Vector3(0, yTarget, zTarget);
   let bestScore = -Infinity;
   body.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
@@ -112,15 +130,18 @@ function findAnus(body: THREE.Object3D, height: number, crotch: THREE.Vector3) {
       _local.fromBufferAttribute(pos, i);
       mesh.localToWorld(_local);
       if (_local.y < y0 || _local.y > y1) continue;
-      if (Math.abs(_local.x) > 0.022) continue;
-      if (_local.z > crotch.z - 0.015) continue;
-      const score = -_local.z * 10 - Math.abs(_local.x) * 14 - Math.abs(_local.y - (crotch.y - 0.018)) * 3;
+      if (Math.abs(_local.x) > 0.02) continue;
+      if (_local.z > crotch.z - 0.012) continue;
+      const score =
+        -Math.abs(_local.z - zTarget) * 12 - Math.abs(_local.x) * 18 - Math.abs(_local.y - yTarget) * 5;
       if (score > bestScore) {
         bestScore = score;
         best.copy(_local);
       }
     }
   });
+  best.x = 0;
+  best.z += 0.012;
   void height;
   return best;
 }

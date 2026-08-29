@@ -34,7 +34,7 @@ export class FistPlay {
     this.anus.copy(rectumHint);
     this.entry.copy(entryFromColon(this.colon, rectumHint));
     this.dir.copy(this.entry);
-    this.anus.addScaledVector(this.entry, -0.02);
+    this.anus.addScaledVector(this.entry, 0.01);
     const prepared = prepareArm(arm);
     this.armLen = prepared.len;
     this.armPos = prepared.pos;
