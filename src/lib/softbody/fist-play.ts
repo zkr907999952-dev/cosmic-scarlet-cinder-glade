@@ -23,6 +23,7 @@ export class FistPlay {
   private baseDepth = 0.018;
   private thrustPhase = 0;
   private stirPhase = 0;
+  arousal = 0;
   private colon: TubeAlong | null = null;
   private armPos: THREE.BufferAttribute | null = null;
   private armRest: Float32Array | null = null;
@@ -92,6 +93,7 @@ export class FistPlay {
     this.baseDepth = 0.018;
     this.thrustPhase = 0;
     this.stirPhase = 0;
+    this.arousal = 0;
     this.tip.copy(this.anus).addScaledVector(this.dir, this.depth);
   }
 
@@ -180,7 +182,10 @@ export class FistPlay {
       stirRadius: number;
     },
   ) {
-    if (!this.enabled) return;
+    if (!this.enabled) {
+      this.arousal += (0 - this.arousal) * (1 - Math.exp(-2.1 * dt));
+      return;
+    }
     this.dir.copy(this.baseDir);
     this.depth = this.baseDepth;
     if (opts.thrust) {
@@ -209,6 +214,15 @@ export class FistPlay {
         this.depth = THREE.MathUtils.clamp(len, 0.012, this.reach());
       }
     }
+    const inBody = this.depth > 0.042;
+    let want = 0;
+    if (inBody) {
+      want = 0.48 + THREE.MathUtils.clamp((this.depth - 0.042) / 0.2, 0, 1) * 0.4;
+      if (opts.thrust) want = Math.min(1, want + 0.18);
+      if (opts.stir) want = Math.min(1, want + 0.32);
+    }
+    const k = want > this.arousal ? 2.6 : 1.7;
+    this.arousal += (want - this.arousal) * (1 - Math.exp(-k * dt));
   }
 
   apply(gut = 1, keepPose = false) {

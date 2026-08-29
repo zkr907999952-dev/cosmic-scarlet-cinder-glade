@@ -27,7 +27,7 @@ import { EXPRESSIONS, POSES } from "@/lib/softbody/soft-skeleton";
 const SLIDERS: {
   id: keyof Pick<
     StudioParams,
-    "stiffness" | "damping" | "gravity" | "pressure" | "jiggle" | "wind" | "abdomenXray" | "bellyInflate" | "gutAmp" | "gutSpeed" | "fistBulge" | "fistSpread" | "fistGut" | "fistLever" | "fistMaxDepth" | "fistRise"
+    "stiffness" | "damping" | "gravity" | "pressure" | "jiggle" | "wind" | "breathAmp" | "breathSpeed" | "abdomenXray" | "bellyInflate" | "gutAmp" | "gutSpeed" | "fistBulge" | "fistSpread" | "fistGut" | "fistLever" | "fistMaxDepth" | "fistRise"
   >;
   label: string;
   min: number;
@@ -40,6 +40,8 @@ const SLIDERS: {
   { id: "pressure", label: "体积", min: 0.1, max: 1, step: 0.01 },
   { id: "jiggle", label: "柔度", min: 0.2, max: 1, step: 0.01 },
   { id: "wind", label: "风力", min: 0, max: 1, step: 0.01 },
+  { id: "breathAmp", label: "呼吸幅度", min: 0, max: 1, step: 0.01 },
+  { id: "breathSpeed", label: "呼吸速度", min: 0.05, max: 1, step: 0.01 },
   { id: "abdomenXray", label: "腹部半透明", min: 0, max: 1, step: 0.01 },
   { id: "bellyInflate", label: "彭腹", min: -1, max: 1, step: 0.01 },
   { id: "gutAmp", label: "蠕动幅度", min: 0, max: 1, step: 0.01 },

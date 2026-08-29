@@ -12,6 +12,8 @@ export type StudioParams = {
   jiggle: number;
   wind: number;
   breathing: boolean;
+  breathAmp: number;
+  breathSpeed: number;
   slowMo: boolean;
   showLattice: boolean;
   showWeights: boolean;
@@ -54,6 +56,8 @@ export const PRESETS: Record<
     jiggle: 1,
     wind: 0,
     breathing: true,
+    breathAmp: 0.72,
+    breathSpeed: 0.48,
     slowMo: false,
     showLattice: false,
     showWeights: false,
@@ -91,6 +95,8 @@ export const PRESETS: Record<
     jiggle: 0.55,
     wind: 0,
     breathing: true,
+    breathAmp: 0.72,
+    breathSpeed: 0.48,
     slowMo: false,
     showLattice: false,
     showWeights: false,
@@ -128,6 +134,8 @@ export const PRESETS: Record<
     jiggle: 1,
     wind: 0.15,
     breathing: false,
+    breathAmp: 0.72,
+    breathSpeed: 0.48,
     slowMo: false,
     showLattice: false,
     showWeights: false,
@@ -165,6 +173,8 @@ export const PRESETS: Record<
     jiggle: 0.78,
     wind: 0,
     breathing: true,
+    breathAmp: 0.72,
+    breathSpeed: 0.48,
     slowMo: false,
     showLattice: false,
     showWeights: false,
@@ -252,6 +262,8 @@ export const useStudio = create<StudioState>((set) => ({
       preset: id,
       abdomenXray: s.abdomenXray,
       bellyInflate: s.bellyInflate,
+      breathAmp: s.breathAmp,
+      breathSpeed: s.breathSpeed,
       showOrgans: s.showOrgans,
       showGutHp: s.showGutHp,
       gutAmp: s.gutAmp,

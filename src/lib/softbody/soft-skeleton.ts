@@ -8,6 +8,9 @@ export type SkelParams = {
   wind: number;
   time: number;
   breathing: boolean;
+  breathAmp: number;
+  breathSpeed: number;
+  breathBoost: number;
   rebound: number;
   inflate: number;
   fistDepth: number;
@@ -144,7 +147,8 @@ export class SoftSkeleton {
   private readonly bindings: SkinBinding[] = [];
   private readonly headY: number;
   private readonly bustY: number;
-  private readonly navelY: number;
+  private navelY: number;
+  private breathT = 0;
   private readonly byName: Record<string, number> = {};
 
   constructor(lm: Record<string, THREE.Vector3>, height: number) {
@@ -729,7 +733,11 @@ export class SoftSkeleton {
   }
 
   private stepTissue(d: number, params: SkelParams) {
-    const breath = params.breathing ? Math.sin(params.time * 1.55) * 0.011 : 0;
+    const boost = THREE.MathUtils.clamp(params.breathBoost, 0, 1);
+    const freq = (0.85 + params.breathSpeed * 1.9) * (1 + boost * 0.55);
+    const amp = (0.006 + params.breathAmp * 0.012) * (1 + boost * 0.4);
+    this.breathT += d * freq;
+    const breath = params.breathing ? Math.sin(this.breathT) * amp : 0;
     const grab = this.hold?.kind === "tissue" ? this.hold : null;
     const k = 18 + params.stiffness * 26;
     const damp = Math.exp(-(4 + params.damping * 6) * d);
@@ -757,8 +765,7 @@ export class SoftSkeleton {
         const belly = smoother(Math.abs(y - ny), 0.12) * smoother(Math.abs(x), 0.14);
         const chest = smoother(Math.abs(y - by), 0.1) * smoother(Math.abs(Math.abs(x) - 0.07), 0.09);
         const front = THREE.MathUtils.clamp((z + 0.01) / 0.11, 0, 1);
-        tz += breath * (0.55 * belly + 0.4 * chest) * front;
-        ty += breath * 0.08 * chest * front;
+        tz += breath * 0.72 * belly * front;
         if (params.fistDepth > 0.002) {
           const over = params.fistDepth;
           const bAmp = params.fistBulge;
