@@ -74,8 +74,9 @@ export class FistPlay {
     if (len < 1e-5) return;
     if (inward > 0.004) {
       this.dir.copy(_v).normalize();
-      if (this.dir.dot(this.entry) < 0.18) {
-        this.dir.lerp(this.entry, 0.45).normalize();
+      if (this.dir.z < 0.06) {
+        this.dir.z = 0.06;
+        this.dir.normalize();
       }
       this.depth = THREE.MathUtils.clamp(len, 0.012, this.armLen * 0.86);
     } else {
@@ -83,7 +84,10 @@ export class FistPlay {
       _n.copy(_v).addScaledVector(this.entry, -inward);
       if (_n.lengthSq() > 1e-8) {
         this.dir.addScaledVector(_n.normalize(), 0.28).normalize();
-        if (this.dir.dot(this.entry) < 0.2) this.dir.lerp(this.entry, 0.5).normalize();
+        if (this.dir.z < 0.06) {
+          this.dir.z = 0.06;
+          this.dir.normalize();
+        }
       }
     }
     this.clampLateral();
@@ -106,17 +110,24 @@ export class FistPlay {
   }
 
   private clampLateral() {
+    if (this.dir.z < 0.08) {
+      this.dir.z = 0.08;
+      this.dir.normalize();
+    }
     const fx = this.anus.x + this.dir.x * this.depth;
     const fy = this.anus.y + this.dir.y * this.depth;
-    const fz = this.anus.z + this.dir.z * this.depth;
+    const fz = Math.max(this.anus.z - 0.004, this.anus.z + this.dir.z * this.depth);
     const y = THREE.MathUtils.clamp(fy, this.yMin, this.yMax);
-    const half = Math.max(0.03, this.halfXAt(y) * 0.72);
+    const half = Math.max(0.03, this.halfXAt(y) * 0.78);
     const x = THREE.MathUtils.clamp(fx, -half, half);
     _v.set(x - this.anus.x, y - this.anus.y, fz - this.anus.z);
     const len = _v.length();
     if (len < 1e-5) return;
     this.dir.copy(_v).normalize();
-    if (this.dir.dot(this.entry) < 0.16) this.dir.lerp(this.entry, 0.4).normalize();
+    if (this.dir.z < 0.08) {
+      this.dir.z = 0.08;
+      this.dir.normalize();
+    }
     this.depth = THREE.MathUtils.clamp(len, 0.012, this.armLen * 0.86);
   }
 
@@ -164,15 +175,21 @@ export class FistPlay {
     let sz = 0;
     let n = 0;
     for (let i = 0; i < this.armCount; i++) {
-      if (rest[i * 3 + 1]! < -0.058) continue;
+      const ry = rest[i * 3 + 1]!;
+      if (ry > -0.018 || ry < -0.1) continue;
       const i3 = i * 3;
       sx += arr[i3]!;
       sy += arr[i3 + 1]!;
       sz += arr[i3 + 2]!;
       n++;
     }
-    if (n > 8) this.tip.set(sx / n, sy / n, sz / n);
-    else this.tip.set(fx, fy, fz);
+    if (n > 8) {
+      this.tip.set(sx / n, sy / n, sz / n);
+      this.tip.addScaledVector(this.dir, -0.028);
+    } else {
+      this.tip.set(fx, fy, fz);
+      this.tip.addScaledVector(this.dir, -0.045);
+    }
   }
 
   private deformColon(gut = 1) {

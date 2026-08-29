@@ -763,7 +763,9 @@ export class SoftSkeleton {
           const spread = Math.max(0.2, params.fistSpread);
           const dx = x - params.fistTx;
           const dy = y - params.fistTy;
-          const bulge = smoother(Math.hypot(dx, dy), 0.16 * spread) * front;
+          const gap = z - params.fistTz;
+          const nearWall = smoother(Math.max(0, gap), 0.11);
+          const bulge = smoother(Math.hypot(dx, dy), 0.16 * spread) * front * nearWall;
           tz += fd * 0.28 * bAmp * bulge;
           ty += fd * 0.09 * bAmp * bulge;
           tx += params.fistLx * 0.07 * fd * bulge * 6 * params.fistLever;
