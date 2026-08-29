@@ -5,6 +5,8 @@ const _v = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _axisY = new THREE.Vector3(0, 1, 0);
+const _side = new THREE.Vector3();
+const _bin = new THREE.Vector3();
 const MIN_PITCH = 0.3;
 const MAX_PITCH = 1.22;
 
@@ -17,6 +19,10 @@ export class FistPlay {
   readonly dir = new THREE.Vector3(0, 0.85, 0.5);
   readonly entry = new THREE.Vector3(0, 0.85, 0.5);
   readonly mid = new THREE.Vector3();
+  private readonly baseDir = new THREE.Vector3(0, 0.85, 0.5);
+  private baseDepth = 0.018;
+  private thrustPhase = 0;
+  private stirPhase = 0;
   private colon: TubeAlong | null = null;
   private armPos: THREE.BufferAttribute | null = null;
   private armRest: Float32Array | null = null;
@@ -51,6 +57,8 @@ export class FistPlay {
     this.yMax = yMax;
     this.slices = slices;
     this.clampLateral();
+    this.baseDir.copy(this.dir);
+    this.baseDepth = this.depth;
     this.layoutArm();
   }
 
@@ -70,6 +78,7 @@ export class FistPlay {
   setMaxScale(scale: number) {
     this.maxScale = THREE.MathUtils.clamp(scale, 0.5, 1.5);
     this.depth = Math.min(this.depth, this.reach());
+    this.baseDepth = Math.min(this.baseDepth, this.reach());
   }
 
   private reach() {
@@ -79,6 +88,10 @@ export class FistPlay {
   reset() {
     this.depth = 0.018;
     this.dir.copy(this.entry);
+    this.baseDir.copy(this.entry);
+    this.baseDepth = 0.018;
+    this.thrustPhase = 0;
+    this.stirPhase = 0;
     this.tip.copy(this.anus).addScaledVector(this.dir, this.depth);
   }
 
@@ -112,6 +125,8 @@ export class FistPlay {
       }
     }
     this.clampLateral();
+    this.baseDir.copy(this.dir);
+    this.baseDepth = this.depth;
   }
 
   private halfXAt(y: number) {
@@ -154,9 +169,57 @@ export class FistPlay {
     this.depth = THREE.MathUtils.clamp(len, 0.012, this.reach());
   }
 
-  apply(gut = 1) {
+  step(
+    dt: number,
+    opts: {
+      thrust: boolean;
+      stir: boolean;
+      thrustSpeed: number;
+      thrustStart: number;
+      stirSpeed: number;
+      stirRadius: number;
+    },
+  ) {
     if (!this.enabled) return;
-    this.clampLateral();
+    this.dir.copy(this.baseDir);
+    this.depth = this.baseDepth;
+    if (opts.thrust) {
+      this.thrustPhase += dt * (0.35 + opts.thrustSpeed * 1.7);
+      const wave = 0.5 - 0.5 * Math.cos(this.thrustPhase);
+      const start = THREE.MathUtils.clamp(opts.thrustStart, 0.012, Math.max(0.014, this.baseDepth - 0.004));
+      this.depth = start + (this.baseDepth - start) * wave;
+    }
+    if (opts.stir) {
+      this.stirPhase += dt * (0.45 + opts.stirSpeed * 2.5);
+      const r = 0.005 + opts.stirRadius * 0.034;
+      _side.crossVectors(this.dir, _axisY);
+      if (_side.lengthSq() < 1e-6) _side.set(1, 0, 0);
+      _side.normalize();
+      _bin.crossVectors(this.dir, _side).normalize();
+      const c = Math.cos(this.stirPhase);
+      const s = Math.sin(this.stirPhase);
+      const fx = this.anus.x + this.dir.x * this.depth + (_side.x * c + _bin.x * s) * r;
+      const fy = this.anus.y + this.dir.y * this.depth + (_side.y * c + _bin.y * s) * r;
+      const fz = this.anus.z + this.dir.z * this.depth + (_side.z * c + _bin.z * s) * r;
+      _v.set(fx - this.anus.x, fy - this.anus.y, fz - this.anus.z);
+      const len = _v.length();
+      if (len > 1e-5) {
+        this.dir.copy(_v).normalize();
+        this.clampPitch();
+        this.depth = THREE.MathUtils.clamp(len, 0.012, this.reach());
+      }
+    }
+  }
+
+  apply(gut = 1, keepPose = false) {
+    if (!this.enabled) return;
+    if (!keepPose) {
+      this.dir.copy(this.baseDir);
+      this.depth = this.baseDepth;
+      this.clampLateral();
+      this.baseDir.copy(this.dir);
+      this.baseDepth = this.depth;
+    }
     this.layoutArm();
     this.deformColon(gut);
   }

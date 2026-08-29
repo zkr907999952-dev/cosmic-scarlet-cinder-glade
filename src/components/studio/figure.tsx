@@ -1359,6 +1359,16 @@ function FittedFigure({
     }
 
     setup.fist.setEnabled(s.interactMode === "fist");
+    setup.fist.setMaxScale(s.fistMaxDepth);
+    const autoFist = s.fistThrust || s.fistStir;
+    setup.fist.step(dt, {
+      thrust: s.fistThrust,
+      stir: s.fistStir,
+      thrustSpeed: s.fistThrustSpeed,
+      thrustStart: s.fistThrustStart,
+      stirSpeed: s.fistStirSpeed,
+      stirRadius: s.fistStirRadius,
+    });
     const fistBelly = setup.fist.belly();
     setup.skeleton.step(dt, {
       stiffness: s.stiffness,
@@ -1388,8 +1398,7 @@ function FittedFigure({
     inflateGuts(setup.gutRoot, setup.navel, s.bellyInflate);
     setup.strike.step(dt);
     setup.strike.apply(s.strikeRebound);
-    setup.fist.setMaxScale(s.fistMaxDepth);
-    setup.fist.apply(s.fistGut);
+    setup.fist.apply(s.fistGut, autoFist);
     setup.gutHealth.applyColor();
     setup.gutHealth.updateBars(camera, s.showGutHp);
     const ring = ringRef.current;

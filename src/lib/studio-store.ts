@@ -31,6 +31,12 @@ export type StudioParams = {
   fistLever: number;
   fistMaxDepth: number;
   fistRise: number;
+  fistThrust: boolean;
+  fistStir: boolean;
+  fistThrustSpeed: number;
+  fistThrustStart: number;
+  fistStirSpeed: number;
+  fistStirRadius: number;
   uiHidden: boolean;
 };
 
@@ -66,7 +72,13 @@ export const PRESETS: Record<
     fistGut: 1,
     fistLever: 1,
     fistMaxDepth: 1,
-    fistRise: 0.8,
+    fistRise: 0.7,
+    fistThrust: false,
+    fistStir: false,
+    fistThrustSpeed: 0.45,
+    fistThrustStart: 0.025,
+    fistStirSpeed: 0.55,
+    fistStirRadius: 0.4,
     uiHidden: false,
   },
   firm: {
@@ -97,7 +109,13 @@ export const PRESETS: Record<
     fistGut: 1,
     fistLever: 1,
     fistMaxDepth: 1,
-    fistRise: 0.8,
+    fistRise: 0.7,
+    fistThrust: false,
+    fistStir: false,
+    fistThrustSpeed: 0.45,
+    fistThrustStart: 0.025,
+    fistStirSpeed: 0.55,
+    fistStirRadius: 0.4,
     uiHidden: false,
   },
   jelly: {
@@ -128,7 +146,13 @@ export const PRESETS: Record<
     fistGut: 1,
     fistLever: 1,
     fistMaxDepth: 1,
-    fistRise: 0.8,
+    fistRise: 0.7,
+    fistThrust: false,
+    fistStir: false,
+    fistThrustSpeed: 0.45,
+    fistThrustStart: 0.025,
+    fistStirSpeed: 0.55,
+    fistStirRadius: 0.4,
     uiHidden: false,
   },
   athletic: {
@@ -159,7 +183,13 @@ export const PRESETS: Record<
     fistGut: 1,
     fistLever: 1,
     fistMaxDepth: 1,
-    fistRise: 0.8,
+    fistRise: 0.7,
+    fistThrust: false,
+    fistStir: false,
+    fistThrustSpeed: 0.45,
+    fistThrustStart: 0.025,
+    fistStirSpeed: 0.55,
+    fistStirRadius: 0.4,
     uiHidden: false,
   },
 };
@@ -235,6 +265,12 @@ export const useStudio = create<StudioState>((set) => ({
       fistLever: s.fistLever,
       fistMaxDepth: s.fistMaxDepth,
       fistRise: s.fistRise,
+      fistThrust: s.fistThrust,
+      fistStir: s.fistStir,
+      fistThrustSpeed: s.fistThrustSpeed,
+      fistThrustStart: s.fistThrustStart,
+      fistStirSpeed: s.fistStirSpeed,
+      fistStirRadius: s.fistStirRadius,
       showLattice: s.showLattice,
       showWeights: s.showWeights,
       uiHidden: s.uiHidden,

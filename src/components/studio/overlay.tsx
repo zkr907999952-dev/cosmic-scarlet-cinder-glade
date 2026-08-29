@@ -102,6 +102,12 @@ export function Overlay() {
   const strikeRange = useStudio((s) => s.strikeRange);
   const strikeRebound = useStudio((s) => s.strikeRebound);
   const fistMaxDepth = useStudio((s) => s.fistMaxDepth);
+  const fistThrust = useStudio((s) => s.fistThrust);
+  const fistStir = useStudio((s) => s.fistStir);
+  const fistThrustSpeed = useStudio((s) => s.fistThrustSpeed);
+  const fistThrustStart = useStudio((s) => s.fistThrustStart);
+  const fistStirSpeed = useStudio((s) => s.fistStirSpeed);
+  const fistStirRadius = useStudio((s) => s.fistStirRadius);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -486,6 +492,106 @@ export function Overlay() {
                       <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
                     </Slider.Root>
                   </label>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Toggle
+                      active={fistThrust}
+                      onClick={() => setParam("fistThrust", !fistThrust)}
+                      icon={<Activity className="size-3.5" />}
+                      label="抽插"
+                    />
+                    <Toggle
+                      active={fistStir}
+                      onClick={() => setParam("fistStir", !fistStir)}
+                      icon={<RotateCw className="size-3.5" />}
+                      label="搅动"
+                    />
+                  </div>
+                  <div className="mt-3 flex flex-col gap-3">
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+                        <span>抽插速度</span>
+                        <span className="tabular-nums text-fg">{fistThrustSpeed.toFixed(2)}</span>
+                      </span>
+                      <Slider.Root
+                        value={[fistThrustSpeed]}
+                        min={0.05}
+                        max={1}
+                        step={0.01}
+                        onValueChange={([v]) => {
+                          if (typeof v === "number") setParam("fistThrustSpeed", v);
+                        }}
+                        className="relative flex h-5 w-full touch-none items-center"
+                      >
+                        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2">
+                          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                        </Slider.Track>
+                        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+                      </Slider.Root>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+                        <span>抽插起始深度</span>
+                        <span className="tabular-nums text-fg">{fistThrustStart.toFixed(2)}</span>
+                      </span>
+                      <Slider.Root
+                        value={[fistThrustStart]}
+                        min={0.012}
+                        max={0.12}
+                        step={0.001}
+                        onValueChange={([v]) => {
+                          if (typeof v === "number") setParam("fistThrustStart", v);
+                        }}
+                        className="relative flex h-5 w-full touch-none items-center"
+                      >
+                        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2">
+                          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                        </Slider.Track>
+                        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+                      </Slider.Root>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+                        <span>搅动速度</span>
+                        <span className="tabular-nums text-fg">{fistStirSpeed.toFixed(2)}</span>
+                      </span>
+                      <Slider.Root
+                        value={[fistStirSpeed]}
+                        min={0.05}
+                        max={1}
+                        step={0.01}
+                        onValueChange={([v]) => {
+                          if (typeof v === "number") setParam("fistStirSpeed", v);
+                        }}
+                        className="relative flex h-5 w-full touch-none items-center"
+                      >
+                        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2">
+                          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                        </Slider.Track>
+                        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+                      </Slider.Root>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+                        <span>搅动半径</span>
+                        <span className="tabular-nums text-fg">{fistStirRadius.toFixed(2)}</span>
+                      </span>
+                      <Slider.Root
+                        value={[fistStirRadius]}
+                        min={0.05}
+                        max={1}
+                        step={0.01}
+                        onValueChange={([v]) => {
+                          if (typeof v === "number") setParam("fistStirRadius", v);
+                        }}
+                        className="relative flex h-5 w-full touch-none items-center"
+                      >
+                        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2">
+                          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                        </Slider.Track>
+                        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+                      </Slider.Root>
+                    </label>
+                  </div>
                 </div>
               ) : null}
 
