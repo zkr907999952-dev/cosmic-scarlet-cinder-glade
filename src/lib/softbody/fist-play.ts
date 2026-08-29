@@ -5,6 +5,8 @@ const _v = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _axisY = new THREE.Vector3(0, 1, 0);
+const MIN_PITCH = 0.3;
+const MAX_PITCH = 1.22;
 
 export class FistPlay {
   readonly root = new THREE.Group();
@@ -23,6 +25,7 @@ export class FistPlay {
   private yMin = 0.7;
   private yMax = 1.15;
   private maxScale = 1;
+  private wallZ = 0.1;
   private slices: { y: number; halfX: number }[] = [];
 
   attach(arm: THREE.Object3D, tubes: TubeAlong[], rectumHint: THREE.Vector3) {
@@ -53,12 +56,15 @@ export class FistPlay {
 
   setMid(navel: THREE.Vector3) {
     this.mid.copy(navel);
+    this.wallZ = navel.z - 0.004;
   }
 
-  startDepth() {
-    _v.copy(this.mid).sub(this.anus);
-    const along = _v.dot(this.dir);
-    return THREE.MathUtils.clamp(along, 0.08, 0.22);
+  wallOver() {
+    const palm = Math.max(0.01, this.depth - 0.038);
+    const fz = this.anus.z + this.dir.z * palm;
+    const gap = this.wallZ - fz;
+    const along = gap / Math.max(0.18, this.dir.z);
+    return Math.max(0, 0.058 - along);
   }
 
   setMaxScale(scale: number) {
@@ -95,20 +101,14 @@ export class FistPlay {
     if (len < 1e-5) return;
     if (inward > 0.004) {
       this.dir.copy(_v).normalize();
-      if (this.dir.z < 0.2) {
-        this.dir.z = 0.2;
-        this.dir.normalize();
-      }
+      this.clampPitch();
       this.depth = THREE.MathUtils.clamp(len, 0.012, this.reach());
     } else {
       this.depth = Math.max(0.012, this.depth + inward);
       _n.copy(_v).addScaledVector(this.entry, -inward);
       if (_n.lengthSq() > 1e-8) {
         this.dir.addScaledVector(_n.normalize(), 0.28).normalize();
-        if (this.dir.z < 0.2) {
-          this.dir.z = 0.2;
-          this.dir.normalize();
-        }
+        this.clampPitch();
       }
     }
     this.clampLateral();
@@ -130,11 +130,18 @@ export class FistPlay {
     return last.halfX;
   }
 
+  private clampPitch() {
+    const pitch = Math.atan2(Math.max(0, this.dir.z), Math.max(0.04, this.dir.y));
+    const p = THREE.MathUtils.clamp(pitch, MIN_PITCH, MAX_PITCH);
+    const xz = this.dir.x;
+    this.dir.y = Math.cos(p);
+    this.dir.z = Math.sin(p);
+    this.dir.x = xz;
+    this.dir.normalize();
+  }
+
   private clampLateral() {
-    if (this.dir.z < 0.2) {
-      this.dir.z = 0.2;
-      this.dir.normalize();
-    }
+    this.clampPitch();
     const fy = THREE.MathUtils.clamp(this.anus.y + this.dir.y * this.depth, this.yMin, this.yMax);
     const half = Math.max(0.03, this.halfXAt(fy) * 0.72);
     const fx = THREE.MathUtils.clamp(this.anus.x + this.dir.x * this.depth, -half, half);
@@ -143,10 +150,7 @@ export class FistPlay {
     const len = _v.length();
     if (len < 1e-5) return;
     this.dir.copy(_v).normalize();
-    if (this.dir.z < 0.2) {
-      this.dir.z = 0.2;
-      this.dir.normalize();
-    }
+    this.clampPitch();
     this.depth = THREE.MathUtils.clamp(len, 0.012, this.reach());
   }
 
@@ -159,11 +163,11 @@ export class FistPlay {
 
   belly() {
     if (!this.enabled || this.depth < 0.025) {
-      return { depth: 0, start: this.startDepth(), x: this.anus.x, y: this.anus.y, z: this.anus.z, lx: 0, lz: 0 };
+      return { depth: 0, start: 0, x: this.anus.x, y: this.anus.y, z: this.anus.z, lx: 0, lz: 0 };
     }
     return {
-      depth: this.depth,
-      start: this.startDepth(),
+      depth: this.wallOver(),
+      start: 0,
       x: this.tip.x,
       y: this.tip.y,
       z: this.tip.z,

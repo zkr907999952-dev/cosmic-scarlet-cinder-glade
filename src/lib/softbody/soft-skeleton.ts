@@ -759,8 +759,8 @@ export class SoftSkeleton {
         const front = THREE.MathUtils.clamp((z + 0.01) / 0.11, 0, 1);
         tz += breath * (0.55 * belly + 0.4 * chest) * front;
         ty += breath * 0.08 * chest * front;
-        if (params.fistDepth > params.fistStart + 0.002) {
-          const over = params.fistDepth - params.fistStart;
+        if (params.fistDepth > 0.002) {
+          const over = params.fistDepth;
           const bAmp = params.fistBulge;
           const spread = Math.max(0.2, params.fistSpread);
           const dx = x - params.fistTx;
@@ -835,7 +835,7 @@ export class SoftSkeleton {
         delta[i3] = delta[i3]! + vx;
         delta[i3 + 1] = delta[i3 + 1]! + vy;
         delta[i3 + 2] = delta[i3 + 2]! + vz;
-        const over = Math.max(0, params.fistDepth - params.fistStart);
+        const over = params.fistDepth;
         const lim = 0.12 + s * 0.04 + Math.abs(params.inflate) * 0.18 + Math.min(0.22, over * 0.85 * params.fistBulge * params.fistRise);
         const len = Math.hypot(delta[i3]!, delta[i3 + 1]!, delta[i3 + 2]!);
         if (len > lim) {

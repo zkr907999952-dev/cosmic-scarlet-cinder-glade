@@ -66,7 +66,7 @@ export const PRESETS: Record<
     fistGut: 1,
     fistLever: 1,
     fistMaxDepth: 1,
-    fistRise: 1.5,
+    fistRise: 0.8,
     uiHidden: false,
   },
   firm: {
@@ -97,7 +97,7 @@ export const PRESETS: Record<
     fistGut: 1,
     fistLever: 1,
     fistMaxDepth: 1,
-    fistRise: 1.5,
+    fistRise: 0.8,
     uiHidden: false,
   },
   jelly: {
@@ -128,7 +128,7 @@ export const PRESETS: Record<
     fistGut: 1,
     fistLever: 1,
     fistMaxDepth: 1,
-    fistRise: 1.5,
+    fistRise: 0.8,
     uiHidden: false,
   },
   athletic: {
@@ -159,7 +159,7 @@ export const PRESETS: Record<
     fistGut: 1,
     fistLever: 1,
     fistMaxDepth: 1,
-    fistRise: 1.5,
+    fistRise: 0.8,
     uiHidden: false,
   },
 };
