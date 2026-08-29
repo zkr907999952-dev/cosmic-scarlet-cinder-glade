@@ -6,6 +6,7 @@ import {
   EyeOff,
   Grid3x3,
   Hand,
+  Grab,
   Heart,
   MousePointerClick,
   Pause,
@@ -104,7 +105,7 @@ export function Overlay() {
       if (e.key === "h" || e.key === "H") setParam("uiHidden", !useStudio.getState().uiHidden);
       if (e.key === "t" || e.key === "T") {
         const cur = useStudio.getState().interactMode;
-        setInteractMode(cur === "drag" ? "pose" : cur === "pose" ? "strike" : "drag");
+        setInteractMode(cur === "drag" ? "pose" : cur === "pose" ? "strike" : cur === "strike" ? "fist" : "drag");
       }
       if (e.key === "x" || e.key === "X") {
         const cur = useStudio.getState().abdomenXray;
@@ -395,9 +396,9 @@ export function Overlay() {
           {panel === "interact" ? (
             <>
               <p className="mb-3 text-xs leading-relaxed text-muted">
-                左键点身体操作。拖拽捏软组织，姿势拉关节，击腹点击释放环状冲击。
+                左键点身体操作。拖拽捏软组织，姿势拉关节，击腹点击释放环状冲击，拳交拖动手臂沿大肠插入。
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setInteractMode("drag")}
@@ -437,7 +438,26 @@ export function Overlay() {
                   <Zap className="size-4" />
                   击腹
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setInteractMode("fist")}
+                  className={cn(
+                    "inline-flex h-11 items-center justify-center gap-1.5 rounded-md text-sm font-medium transition-colors duration-fast",
+                    interactMode === "fist"
+                      ? "bg-accent text-accent-fg"
+                      : "border border-border bg-surface-2 text-muted hover:text-fg",
+                  )}
+                >
+                  <Grab className="size-4" />
+                  拳交
+                </button>
               </div>
+
+              {interactMode === "fist" ? (
+                <p className="mt-3 text-xs leading-relaxed text-muted">
+                  左键拖拳头。肛门是支点，体外的手臂会跟着转，手臂本身是刚体不会弯折。
+                </p>
+              ) : null}
 
               {interactMode === "strike" ? (
                 <div className="mt-3">
@@ -550,7 +570,9 @@ export function Overlay() {
                     : "拖拽中"
                   : interactMode === "strike"
                     ? "击腹就绪"
-                    : "待机"}
+                    : interactMode === "fist"
+                      ? "拳交：拖动手臂插入"
+                      : "待机"}
               </p>
             </>
           ) : null}
@@ -584,7 +606,15 @@ export function Overlay() {
 
       <div className="pointer-events-none absolute bottom-auto left-4 hidden items-center gap-2 text-xs text-muted sm:bottom-6 sm:flex">
         <Hand className="size-3.5" />
-        <span>{interactMode === "pose" ? "姿势" : interactMode === "strike" ? "击腹" : "拖拽"}</span>
+        <span>
+          {interactMode === "pose"
+            ? "姿势"
+            : interactMode === "strike"
+              ? "击腹"
+              : interactMode === "fist"
+                ? "拳交"
+                : "拖拽"}
+        </span>
         <span className="text-border">/</span>
         <Activity className="size-3.5" />
         <span>右键旋转 · 左键点身体操作 · T 拖拽/姿势 · X 透视 · K 骨骼 · W 绑定</span>

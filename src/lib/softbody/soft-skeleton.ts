@@ -10,6 +10,12 @@ export type SkelParams = {
   breathing: boolean;
   rebound: number;
   inflate: number;
+  fistDepth: number;
+  fistTx: number;
+  fistTy: number;
+  fistTz: number;
+  fistLx: number;
+  fistLz: number;
 };
 
 export type ExpressionId = "rest" | "smile" | "surprise" | "open";
@@ -748,6 +754,16 @@ export class SoftSkeleton {
         const front = THREE.MathUtils.clamp((z + 0.01) / 0.11, 0, 1);
         tz += breath * (0.55 * belly + 0.4 * chest) * front;
         ty += breath * 0.08 * chest * front;
+        if (params.fistDepth > 0.03) {
+          const fd = params.fistDepth;
+          const dx = x - params.fistTx;
+          const dy = y - params.fistTy;
+          const bulge = smoother(Math.hypot(dx, dy), 0.16) * front;
+          tz += fd * 0.16 * bulge;
+          ty += fd * 0.05 * bulge;
+          tx += params.fistLx * 0.07 * fd * bulge * 6;
+          tz += params.fistLz * 0.05 * fd * bulge * 6;
+        }
         const inf = params.inflate;
         if (Math.abs(inf) > 0.004) {
           const yMask = smoother(Math.abs(y - ny), 0.2);
@@ -811,7 +827,7 @@ export class SoftSkeleton {
         delta[i3] = delta[i3]! + vx;
         delta[i3 + 1] = delta[i3 + 1]! + vy;
         delta[i3 + 2] = delta[i3 + 2]! + vz;
-        const lim = 0.12 + s * 0.04 + Math.abs(params.inflate) * 0.18;
+        const lim = 0.12 + s * 0.04 + Math.abs(params.inflate) * 0.18 + Math.min(0.12, params.fistDepth * 0.35);
         const len = Math.hypot(delta[i3]!, delta[i3 + 1]!, delta[i3 + 2]!);
         if (len > lim) {
           const m = lim / len;

@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { ExpressionId, PoseId } from "@/lib/softbody/soft-skeleton";
 
 export type PresetId = "soft" | "firm" | "jelly" | "athletic";
-export type InteractMode = "drag" | "pose" | "strike";
+export type InteractMode = "drag" | "pose" | "strike" | "fist";
 
 export type StudioParams = {
   stiffness: number;

@@ -7,6 +7,7 @@ import { SoftSkeleton } from "@/lib/softbody/soft-skeleton";
 import { GutPeristalsis } from "@/lib/softbody/peristalsis";
 import { BellyStrike } from "@/lib/softbody/belly-strike";
 import { GutHealth } from "@/lib/softbody/gut-health";
+import { FistPlay } from "@/lib/softbody/fist-play";
 import { useStudio } from "@/lib/studio-store";
 
 const _hit = new THREE.Vector3();
@@ -29,6 +30,7 @@ type FigureProps = {
   character: THREE.Object3D;
   intestines: THREE.Object3D;
   pelvis: THREE.Object3D;
+  arm: THREE.Object3D;
 };
 
 function meshKey(mesh: THREE.Object3D) {
@@ -91,6 +93,35 @@ function findCrotch(body: THREE.Object3D, height: number) {
       }
     }
   });
+  return best;
+}
+
+function findAnus(body: THREE.Object3D, height: number, crotch: THREE.Vector3) {
+  const y0 = crotch.y - 0.04;
+  const y1 = crotch.y + 0.012;
+  const best = new THREE.Vector3(0, crotch.y - 0.02, crotch.z - 0.07);
+  let bestScore = -Infinity;
+  body.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    if (!isTorsoMesh(mesh) && !/skin|dress/.test(meshKey(mesh))) return;
+    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos) return;
+    const step = Math.max(1, Math.floor(pos.count / 9000));
+    for (let i = 0; i < pos.count; i += step) {
+      _local.fromBufferAttribute(pos, i);
+      mesh.localToWorld(_local);
+      if (_local.y < y0 || _local.y > y1) continue;
+      if (Math.abs(_local.x) > 0.022) continue;
+      if (_local.z > crotch.z - 0.015) continue;
+      const score = -_local.z * 10 - Math.abs(_local.x) * 14 - Math.abs(_local.y - (crotch.y - 0.018)) * 3;
+      if (score > bestScore) {
+        bestScore = score;
+        best.copy(_local);
+      }
+    }
+  });
+  void height;
   return best;
 }
 
@@ -931,12 +962,13 @@ function attachXray(mesh: THREE.Mesh, y0: number, y1: number, xMax: number, zFro
   mesh.material = next.length === 1 ? next[0] : next;
 }
 
-export function Figure({ controlsRef, character, intestines, pelvis }: FigureProps) {
+export function Figure({ controlsRef, character, intestines, pelvis, arm }: FigureProps) {
   return (
     <FittedFigure
       character={character}
       intestines={intestines}
       pelvis={pelvis}
+      arm={arm}
       controlsRef={controlsRef}
     />
   );
@@ -946,11 +978,13 @@ function FittedFigure({
   character,
   intestines,
   pelvis,
+  arm,
   controlsRef,
 }: {
   character: THREE.Object3D;
   intestines: THREE.Object3D;
   pelvis: THREE.Object3D;
+  arm: THREE.Object3D;
   controlsRef: RefObject<OrbitControlsImpl | null>;
 }) {
   const pokeRef = useRef<THREE.Mesh>(null);
@@ -964,7 +998,7 @@ function FittedFigure({
   const poseRef = useRef(useStudio.getState().pose);
   const grab = useRef<{
     active: boolean;
-    mode: "pose" | "drag";
+    mode: "pose" | "drag" | "fist";
     origin: THREE.Vector3;
     planePoint: THREE.Vector3;
     normal: THREE.Vector3;
@@ -1007,6 +1041,7 @@ function FittedFigure({
     abdomen.min.z = skinZ - 0.1;
 
     const crotch = findCrotch(body, height);
+    const anus = findAnus(body, height, crotch);
     const pelvic = placePelvisPack(pelvis, crotch, navel, skinZ - 0.028);
     polishOrgans(pelvic, "pelvis");
     pelvic.visible = false;
@@ -1088,6 +1123,9 @@ function FittedFigure({
     const gutHealth = new GutHealth();
     gutHealth.attach(gut, peristalsis.getTubes());
     root.add(gutHealth.bars);
+    const fist = new FistPlay();
+    fist.attach(arm, peristalsis.getTubes(), anus);
+    root.add(fist.root);
     pelvic.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (mesh.isMesh) bindMesh(mesh, "organs");
@@ -1140,6 +1178,7 @@ function FittedFigure({
         guts: { min: gutBoxNow.min.toArray(), max: gutBoxNow.max.toArray() },
         navel: navel.toArray(),
         crotch: crotch.toArray(),
+        anus: anus.toArray(),
         uterus: uterusNow
           ? [(uterusNow.min.x + uterusNow.max.x) * 0.5, (uterusNow.min.y + uterusNow.max.y) * 0.5, (uterusNow.min.z + uterusNow.max.z) * 0.5]
           : [0, yNavel - 0.1, 0],
@@ -1166,6 +1205,7 @@ function FittedFigure({
       peristalsis,
       strike,
       gutHealth,
+      fist,
       navel,
       boundGeos,
       bellyLight,
@@ -1175,7 +1215,7 @@ function FittedFigure({
       boneLines,
       jointBuf,
     };
-  }, [character, intestines, pelvis]);
+  }, [character, intestines, pelvis, arm]);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => {
@@ -1233,6 +1273,7 @@ function FittedFigure({
       lastReset.current = s.resetNonce;
       setup.skeleton.reset();
       setup.gutHealth.reset();
+      setup.fist.reset();
     }
     if (s.strikeNonce !== lastStrike.current) {
       lastStrike.current = s.strikeNonce;
@@ -1278,7 +1319,11 @@ function FittedFigure({
       const o = grab.current.origin;
       const bone = grab.current.bone;
       if (_ray.intersectPlane(_plane, _target)) {
-        if (grab.current.mode === "pose") {
+        if (grab.current.mode === "fist") {
+          setup.fist.dragTo(o, _target);
+          grab.current.origin.copy(_target);
+          grab.current.planePoint.copy(_target);
+        } else if (grab.current.mode === "pose") {
           setup.skeleton.setPoseDrag(bone, o.x, o.y, o.z, _target.x, _target.y, _target.z);
         } else {
           setup.skeleton.setTissueDrag(o.x, o.y, o.z, _target.x, _target.y, _target.z, 0.16);
@@ -1290,6 +1335,8 @@ function FittedFigure({
       }
     }
 
+    setup.fist.setEnabled(s.interactMode === "fist");
+    const fistBelly = setup.fist.belly();
     setup.skeleton.step(dt, {
       stiffness: s.stiffness,
       damping: s.damping,
@@ -1300,6 +1347,12 @@ function FittedFigure({
       breathing: s.breathing,
       rebound: s.strikeRebound,
       inflate: s.bellyInflate,
+      fistDepth: fistBelly.depth,
+      fistTx: fistBelly.x,
+      fistTy: fistBelly.y,
+      fistTz: fistBelly.z,
+      fistLx: fistBelly.lx,
+      fistLz: fistBelly.lz,
     });
     if (s.showOrgans && s.abdomenXray > 0.08) {
       setup.peristalsis.apply(state.clock.elapsedTime, s.gutAmp, s.gutSpeed);
@@ -1307,6 +1360,7 @@ function FittedFigure({
     inflateGuts(setup.gutRoot, setup.navel, s.bellyInflate);
     setup.strike.step(dt);
     setup.strike.apply(s.strikeRebound);
+    setup.fist.apply();
     setup.gutHealth.applyColor();
     setup.gutHealth.updateBars(camera, s.showGutHp);
     const ring = ringRef.current;
@@ -1385,7 +1439,7 @@ function FittedFigure({
     return g;
   }, [setup]);
 
-  const beginGrab = (point: THREE.Vector3, normal: THREE.Vector3, mode: "pose" | "drag") => {
+  const beginGrab = (point: THREE.Vector3, normal: THREE.Vector3, mode: "pose" | "drag" | "fist") => {
     grab.current = {
       active: true,
       mode,
@@ -1410,6 +1464,10 @@ function FittedFigure({
     const mode = useStudio.getState().interactMode;
     if (mode === "strike") {
       useStudio.getState().fireStrike([_hit.x, _hit.y, _hit.z]);
+      return;
+    }
+    if (mode === "fist") {
+      beginGrab(_hit, _normal.set(0, 0, 1), "fist");
       return;
     }
     if (e.face) {

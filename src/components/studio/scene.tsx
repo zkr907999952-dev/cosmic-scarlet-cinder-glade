@@ -10,10 +10,12 @@ export default function Scene({
   character,
   intestines,
   pelvis,
+  arm,
 }: {
   character: THREE.Object3D;
   intestines: THREE.Object3D;
   pelvis: THREE.Object3D;
+  arm: THREE.Object3D;
 }) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
 
@@ -47,6 +49,7 @@ export default function Scene({
             character={character}
             intestines={intestines}
             pelvis={pelvis}
+            arm={arm}
           />
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
             <circleGeometry args={[3.8, 72]} />
