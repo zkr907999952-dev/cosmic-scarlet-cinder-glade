@@ -25,6 +25,10 @@ export type StudioParams = {
   strikeForce: number;
   strikeRange: number;
   strikeRebound: number;
+  fistBulge: number;
+  fistSpread: number;
+  fistGut: number;
+  fistLever: number;
   uiHidden: boolean;
 };
 
@@ -55,6 +59,10 @@ export const PRESETS: Record<
     strikeForce: 0.78,
     strikeRange: 0.55,
     strikeRebound: 0.58,
+    fistBulge: 1.4,
+    fistSpread: 1,
+    fistGut: 1,
+    fistLever: 1,
     uiHidden: false,
   },
   firm: {
@@ -80,6 +88,10 @@ export const PRESETS: Record<
     strikeForce: 0.78,
     strikeRange: 0.55,
     strikeRebound: 0.58,
+    fistBulge: 1.4,
+    fistSpread: 1,
+    fistGut: 1,
+    fistLever: 1,
     uiHidden: false,
   },
   jelly: {
@@ -105,6 +117,10 @@ export const PRESETS: Record<
     strikeForce: 0.78,
     strikeRange: 0.55,
     strikeRebound: 0.58,
+    fistBulge: 1.4,
+    fistSpread: 1,
+    fistGut: 1,
+    fistLever: 1,
     uiHidden: false,
   },
   athletic: {
@@ -130,6 +146,10 @@ export const PRESETS: Record<
     strikeForce: 0.78,
     strikeRange: 0.55,
     strikeRebound: 0.58,
+    fistBulge: 1.4,
+    fistSpread: 1,
+    fistGut: 1,
+    fistLever: 1,
     uiHidden: false,
   },
 };
@@ -199,6 +219,10 @@ export const useStudio = create<StudioState>((set) => ({
       strikeForce: s.strikeForce,
       strikeRange: s.strikeRange,
       strikeRebound: s.strikeRebound,
+      fistBulge: s.fistBulge,
+      fistSpread: s.fistSpread,
+      fistGut: s.fistGut,
+      fistLever: s.fistLever,
       showLattice: s.showLattice,
       showWeights: s.showWeights,
       uiHidden: s.uiHidden,

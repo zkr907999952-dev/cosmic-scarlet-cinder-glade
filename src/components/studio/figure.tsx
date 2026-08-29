@@ -1125,6 +1125,7 @@ function FittedFigure({
     root.add(gutHealth.bars);
     const fist = new FistPlay();
     fist.attach(arm, peristalsis.getTubes(), anus);
+    fist.setEnvelope(crotch.y + 0.012, navel.y + 0.108, waistProfile);
     root.add(fist.root);
     pelvic.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
@@ -1353,6 +1354,9 @@ function FittedFigure({
       fistTz: fistBelly.z,
       fistLx: fistBelly.lx,
       fistLz: fistBelly.lz,
+      fistBulge: s.fistBulge,
+      fistSpread: s.fistSpread,
+      fistLever: s.fistLever,
     });
     if (s.showOrgans && s.abdomenXray > 0.08) {
       setup.peristalsis.apply(state.clock.elapsedTime, s.gutAmp, s.gutSpeed);
@@ -1360,7 +1364,7 @@ function FittedFigure({
     inflateGuts(setup.gutRoot, setup.navel, s.bellyInflate);
     setup.strike.step(dt);
     setup.strike.apply(s.strikeRebound);
-    setup.fist.apply();
+    setup.fist.apply(s.fistGut);
     setup.gutHealth.applyColor();
     setup.gutHealth.updateBars(camera, s.showGutHp);
     const ring = ringRef.current;

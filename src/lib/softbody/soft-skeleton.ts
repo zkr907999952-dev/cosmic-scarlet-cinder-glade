@@ -16,6 +16,9 @@ export type SkelParams = {
   fistTz: number;
   fistLx: number;
   fistLz: number;
+  fistBulge: number;
+  fistSpread: number;
+  fistLever: number;
 };
 
 export type ExpressionId = "rest" | "smile" | "surprise" | "open";
@@ -756,13 +759,15 @@ export class SoftSkeleton {
         ty += breath * 0.08 * chest * front;
         if (params.fistDepth > 0.03) {
           const fd = params.fistDepth;
+          const bAmp = params.fistBulge;
+          const spread = Math.max(0.2, params.fistSpread);
           const dx = x - params.fistTx;
           const dy = y - params.fistTy;
-          const bulge = smoother(Math.hypot(dx, dy), 0.16) * front;
-          tz += fd * 0.16 * bulge;
-          ty += fd * 0.05 * bulge;
-          tx += params.fistLx * 0.07 * fd * bulge * 6;
-          tz += params.fistLz * 0.05 * fd * bulge * 6;
+          const bulge = smoother(Math.hypot(dx, dy), 0.16 * spread) * front;
+          tz += fd * 0.28 * bAmp * bulge;
+          ty += fd * 0.09 * bAmp * bulge;
+          tx += params.fistLx * 0.07 * fd * bulge * 6 * params.fistLever;
+          tz += params.fistLz * 0.05 * fd * bulge * 6 * params.fistLever;
         }
         const inf = params.inflate;
         if (Math.abs(inf) > 0.004) {
@@ -827,7 +832,7 @@ export class SoftSkeleton {
         delta[i3] = delta[i3]! + vx;
         delta[i3 + 1] = delta[i3 + 1]! + vy;
         delta[i3 + 2] = delta[i3 + 2]! + vz;
-        const lim = 0.12 + s * 0.04 + Math.abs(params.inflate) * 0.18 + Math.min(0.12, params.fistDepth * 0.35);
+        const lim = 0.12 + s * 0.04 + Math.abs(params.inflate) * 0.18 + Math.min(0.2, params.fistDepth * 0.45 * params.fistBulge);
         const len = Math.hypot(delta[i3]!, delta[i3 + 1]!, delta[i3 + 2]!);
         if (len > lim) {
           const m = lim / len;

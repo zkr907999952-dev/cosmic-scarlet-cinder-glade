@@ -19,6 +19,9 @@ export class FistPlay {
   private armRest: Float32Array | null = null;
   private armCount = 0;
   private armLen = 0.38;
+  private yMin = 0.7;
+  private yMax = 1.15;
+  private slices: { y: number; halfX: number }[] = [];
 
   attach(arm: THREE.Object3D, tubes: TubeAlong[], rectumHint: THREE.Vector3) {
     this.root.clear();
@@ -35,6 +38,14 @@ export class FistPlay {
     this.root.add(prepared.root);
     this.root.visible = false;
     this.reset();
+    this.layoutArm();
+  }
+
+  setEnvelope(yMin: number, yMax: number, slices: { y: number; halfX: number }[]) {
+    this.yMin = yMin;
+    this.yMax = yMax;
+    this.slices = slices;
+    this.clampLateral();
     this.layoutArm();
   }
 
@@ -75,13 +86,45 @@ export class FistPlay {
         if (this.dir.dot(this.entry) < 0.2) this.dir.lerp(this.entry, 0.5).normalize();
       }
     }
-    this.tip.copy(this.anus).addScaledVector(this.dir, this.depth);
+    this.clampLateral();
   }
 
-  apply() {
+  private halfXAt(y: number) {
+    const sl = this.slices;
+    if (sl.length === 0) return 0.08;
+    if (y <= sl[0]!.y) return sl[0]!.halfX;
+    const last = sl[sl.length - 1]!;
+    if (y >= last.y) return last.halfX;
+    for (let i = 1; i < sl.length; i++) {
+      const a = sl[i - 1]!;
+      const b = sl[i]!;
+      if (y > b.y) continue;
+      const t = (y - a.y) / Math.max(1e-5, b.y - a.y);
+      return a.halfX + (b.halfX - a.halfX) * t;
+    }
+    return last.halfX;
+  }
+
+  private clampLateral() {
+    const fx = this.anus.x + this.dir.x * this.depth;
+    const fy = this.anus.y + this.dir.y * this.depth;
+    const fz = this.anus.z + this.dir.z * this.depth;
+    const y = THREE.MathUtils.clamp(fy, this.yMin, this.yMax);
+    const half = Math.max(0.03, this.halfXAt(y) * 0.72);
+    const x = THREE.MathUtils.clamp(fx, -half, half);
+    _v.set(x - this.anus.x, y - this.anus.y, fz - this.anus.z);
+    const len = _v.length();
+    if (len < 1e-5) return;
+    this.dir.copy(_v).normalize();
+    if (this.dir.dot(this.entry) < 0.16) this.dir.lerp(this.entry, 0.4).normalize();
+    this.depth = THREE.MathUtils.clamp(len, 0.012, this.armLen * 0.86);
+  }
+
+  apply(gut = 1) {
     if (!this.enabled) return;
+    this.clampLateral();
     this.layoutArm();
-    this.deformColon();
+    this.deformColon(gut);
   }
 
   belly() {
@@ -116,9 +159,23 @@ export class FistPlay {
       arr[i3 + 2] = _v.z + fz;
     }
     this.armPos.needsUpdate = true;
+    let sx = 0;
+    let sy = 0;
+    let sz = 0;
+    let n = 0;
+    for (let i = 0; i < this.armCount; i++) {
+      if (rest[i * 3 + 1]! < -0.058) continue;
+      const i3 = i * 3;
+      sx += arr[i3]!;
+      sy += arr[i3 + 1]!;
+      sz += arr[i3 + 2]!;
+      n++;
+    }
+    if (n > 8) this.tip.set(sx / n, sy / n, sz / n);
+    else this.tip.set(fx, fy, fz);
   }
 
-  private deformColon() {
+  private deformColon(gut = 1) {
     const tube = this.colon;
     if (!tube || this.depth < 0.02) return;
     const { positions, count } = tube;
@@ -129,7 +186,8 @@ export class FistPlay {
     const dy = this.dir.y;
     const dz = this.dir.z;
     const reach = this.depth;
-    const rad = 0.018;
+    const rad = 0.018 * (0.55 + gut * 0.7);
+    const mix = 0.9 * THREE.MathUtils.clamp(gut, 0, 2);
     for (let i = 0; i < count; i++) {
       const i3 = i * 3;
       const px = positions[i3]!;
@@ -159,7 +217,7 @@ export class FistPlay {
         oy = 0;
         oz = 0;
       }
-      const m = w * 0.9;
+      const m = w * mix;
       positions[i3] = px + (cx + ox - px) * m;
       positions[i3 + 1] = py + (cy + oy - py) * m;
       positions[i3 + 2] = pz + (cz + oz - pz) * m;
