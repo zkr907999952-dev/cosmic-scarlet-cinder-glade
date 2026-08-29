@@ -74,7 +74,6 @@ export function Overlay() {
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<PanelId>("settings");
   const preset = useStudio((s) => s.preset);
-  const energy = useStudio((s) => s.energy);
   const breathing = useStudio((s) => s.breathing);
   const slowMo = useStudio((s) => s.slowMo);
   const showLattice = useStudio((s) => s.showLattice);
@@ -150,7 +149,6 @@ export function Overlay() {
     return () => window.removeEventListener("keydown", onKey);
   }, [resetSim, setParam, setInteractMode, setExpression, setPose]);
 
-  const energyNorm = Math.min(1, energy * 8);
   const hideUi = () => setParam("uiHidden", true);
   const showUi = () => setParam("uiHidden", false);
 
@@ -202,8 +200,7 @@ export function Overlay() {
         <>
       <header className="pointer-events-none absolute top-0 right-0 left-0 flex items-start justify-between gap-4 p-4 pr-16 sm:p-6 sm:pr-20">
         <div className="max-w-[16rem]">
-          <p className="font-display text-3xl leading-none tracking-display text-fg sm:text-4xl">VELA</p>
-          <p className="mt-1 text-xs tracking-[0.18em] text-muted uppercase">腰腹柔体模拟</p>
+          <p className="font-display text-2xl leading-none tracking-display text-fg sm:text-3xl">柔肠模拟器</p>
         </div>
         <div className="pointer-events-auto">
           <button
@@ -226,23 +223,10 @@ export function Overlay() {
         </div>
       </header>
 
-      <div className="pointer-events-none absolute top-20 left-4 hidden w-44 sm:block sm:left-6">
+      <div className="pointer-events-none absolute top-16 left-4 hidden w-44 sm:block sm:left-6">
         <p className="text-xs leading-snug text-muted text-pretty">
           左键空白处旋转。拖拽：在骨骼上捏软组织。姿势：拉关节，松手后保持。K 骨骼 · W 绑定 · 1-4 表情 · 5-0 动作 · X 透视。
         </p>
-        <div className="mt-4">
-          <div className="mb-1 flex items-center justify-between text-xs tracking-wide text-muted uppercase">
-            <span>形变能量</span>
-            <span className="tabular-nums text-fg">{energyNorm.toFixed(2)}</span>
-          </div>
-          <div className="h-1 overflow-hidden rounded-full bg-surface-2">
-            <div
-              className="h-full rounded-full bg-accent transition-[width] duration-fast ease-smooth-out"
-              style={{ width: `${energyNorm * 100}%` }}
-            />
-          </div>
-          <p className="mt-3 text-xs text-muted">{grabbing ? (interactMode === "pose" ? "调姿中" : "拖拽中") : "待机"}</p>
-        </div>
       </div>
 
       <aside

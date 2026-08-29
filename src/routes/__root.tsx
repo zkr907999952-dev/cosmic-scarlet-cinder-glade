@@ -3,7 +3,7 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "VELA";
+const APP_NAME = "柔肠模拟器";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -14,7 +14,7 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#0b0b0c" },
       {
         name: "description",
-        content: "VELA — 基于物理的 3D 腰腹柔体模拟工作室",
+        content: "柔肠模拟器 — 3D 肠道柔体模拟",
       },
     ],
     links: [
