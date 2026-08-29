@@ -14,6 +14,7 @@ export class FistPlay {
   readonly tip = new THREE.Vector3();
   readonly dir = new THREE.Vector3(0, 0.85, 0.5);
   readonly entry = new THREE.Vector3(0, 0.85, 0.5);
+  readonly mid = new THREE.Vector3();
   private colon: TubeAlong | null = null;
   private armPos: THREE.BufferAttribute | null = null;
   private armRest: Float32Array | null = null;
@@ -48,6 +49,16 @@ export class FistPlay {
     this.slices = slices;
     this.clampLateral();
     this.layoutArm();
+  }
+
+  setMid(navel: THREE.Vector3) {
+    this.mid.copy(navel);
+  }
+
+  startDepth() {
+    _v.copy(this.mid).sub(this.anus);
+    const along = _v.dot(this.dir);
+    return THREE.MathUtils.clamp(along, 0.08, 0.22);
   }
 
   setMaxScale(scale: number) {
@@ -148,10 +159,11 @@ export class FistPlay {
 
   belly() {
     if (!this.enabled || this.depth < 0.025) {
-      return { depth: 0, x: this.anus.x, y: this.anus.y, z: this.anus.z, lx: 0, lz: 0 };
+      return { depth: 0, start: this.startDepth(), x: this.anus.x, y: this.anus.y, z: this.anus.z, lx: 0, lz: 0 };
     }
     return {
       depth: this.depth,
+      start: this.startDepth(),
       x: this.tip.x,
       y: this.tip.y,
       z: this.tip.z,

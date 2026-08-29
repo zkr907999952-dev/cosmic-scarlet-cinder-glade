@@ -27,7 +27,7 @@ import { EXPRESSIONS, POSES } from "@/lib/softbody/soft-skeleton";
 const SLIDERS: {
   id: keyof Pick<
     StudioParams,
-    "stiffness" | "damping" | "gravity" | "pressure" | "jiggle" | "wind" | "abdomenXray" | "bellyInflate" | "gutAmp" | "gutSpeed" | "fistBulge" | "fistSpread" | "fistGut" | "fistLever" | "fistMaxDepth"
+    "stiffness" | "damping" | "gravity" | "pressure" | "jiggle" | "wind" | "abdomenXray" | "bellyInflate" | "gutAmp" | "gutSpeed" | "fistBulge" | "fistSpread" | "fistGut" | "fistLever" | "fistMaxDepth" | "fistRise"
   >;
   label: string;
   min: number;
@@ -49,6 +49,7 @@ const SLIDERS: {
   { id: "fistGut", label: "肠子撑开", min: 0, max: 2, step: 0.01 },
   { id: "fistLever", label: "杠杆搅动", min: 0, max: 2, step: 0.01 },
   { id: "fistMaxDepth", label: "最大插入深度", min: 0.5, max: 1.5, step: 0.01 },
+  { id: "fistRise", label: "隆起叠加速度", min: 0.2, max: 3, step: 0.01 },
 ];
 
 type PanelId = "settings" | "interact" | "tools" | "weapons";

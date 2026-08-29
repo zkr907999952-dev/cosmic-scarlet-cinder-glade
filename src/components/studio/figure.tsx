@@ -1126,6 +1126,7 @@ function FittedFigure({
     const fist = new FistPlay();
     fist.attach(arm, peristalsis.getTubes(), anus);
     fist.setEnvelope(crotch.y + 0.012, navel.y + 0.108, waistProfile);
+    fist.setMid(navel);
     root.add(fist.root);
     pelvic.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
@@ -1349,6 +1350,7 @@ function FittedFigure({
       rebound: s.strikeRebound,
       inflate: s.bellyInflate,
       fistDepth: fistBelly.depth,
+      fistStart: fistBelly.start,
       fistTx: fistBelly.x,
       fistTy: fistBelly.y,
       fistTz: fistBelly.z,
@@ -1357,6 +1359,7 @@ function FittedFigure({
       fistBulge: s.fistBulge,
       fistSpread: s.fistSpread,
       fistLever: s.fistLever,
+      fistRise: s.fistRise,
     });
     if (s.showOrgans && s.abdomenXray > 0.08) {
       setup.peristalsis.apply(state.clock.elapsedTime, s.gutAmp, s.gutSpeed);

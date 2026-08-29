@@ -11,6 +11,7 @@ export type SkelParams = {
   rebound: number;
   inflate: number;
   fistDepth: number;
+  fistStart: number;
   fistTx: number;
   fistTy: number;
   fistTz: number;
@@ -19,6 +20,7 @@ export type SkelParams = {
   fistBulge: number;
   fistSpread: number;
   fistLever: number;
+  fistRise: number;
 };
 
 export type ExpressionId = "rest" | "smile" | "surprise" | "open";
@@ -757,17 +759,18 @@ export class SoftSkeleton {
         const front = THREE.MathUtils.clamp((z + 0.01) / 0.11, 0, 1);
         tz += breath * (0.55 * belly + 0.4 * chest) * front;
         ty += breath * 0.08 * chest * front;
-        if (params.fistDepth > 0.03) {
-          const fd = params.fistDepth;
+        if (params.fistDepth > params.fistStart + 0.002) {
+          const over = params.fistDepth - params.fistStart;
           const bAmp = params.fistBulge;
           const spread = Math.max(0.2, params.fistSpread);
           const dx = x - params.fistTx;
           const dy = y - params.fistTy;
           const bulge = smoother(Math.hypot(dx, dy), 0.16 * spread) * front;
-          tz += fd * 0.28 * bAmp * bulge;
-          ty += fd * 0.09 * bAmp * bulge;
-          tx += params.fistLx * 0.07 * fd * bulge * 6 * params.fistLever;
-          tz += params.fistLz * 0.05 * fd * bulge * 6 * params.fistLever;
+          const rise = params.fistRise;
+          tz += over * 0.9 * bAmp * rise * bulge;
+          ty += over * 0.26 * bAmp * rise * bulge;
+          tx += params.fistLx * 0.07 * over * bulge * 6 * params.fistLever * rise;
+          tz += params.fistLz * 0.05 * over * bulge * 6 * params.fistLever * rise;
         }
         const inf = params.inflate;
         if (Math.abs(inf) > 0.004) {
@@ -832,7 +835,8 @@ export class SoftSkeleton {
         delta[i3] = delta[i3]! + vx;
         delta[i3 + 1] = delta[i3 + 1]! + vy;
         delta[i3 + 2] = delta[i3 + 2]! + vz;
-        const lim = 0.12 + s * 0.04 + Math.abs(params.inflate) * 0.18 + Math.min(0.2, params.fistDepth * 0.45 * params.fistBulge);
+        const over = Math.max(0, params.fistDepth - params.fistStart);
+        const lim = 0.12 + s * 0.04 + Math.abs(params.inflate) * 0.18 + Math.min(0.22, over * 0.85 * params.fistBulge * params.fistRise);
         const len = Math.hypot(delta[i3]!, delta[i3 + 1]!, delta[i3 + 2]!);
         if (len > lim) {
           const m = lim / len;

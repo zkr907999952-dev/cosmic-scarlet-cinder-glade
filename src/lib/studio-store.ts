@@ -30,6 +30,7 @@ export type StudioParams = {
   fistGut: number;
   fistLever: number;
   fistMaxDepth: number;
+  fistRise: number;
   uiHidden: boolean;
 };
 
@@ -65,6 +66,7 @@ export const PRESETS: Record<
     fistGut: 1,
     fistLever: 1,
     fistMaxDepth: 1,
+    fistRise: 1.5,
     uiHidden: false,
   },
   firm: {
@@ -95,6 +97,7 @@ export const PRESETS: Record<
     fistGut: 1,
     fistLever: 1,
     fistMaxDepth: 1,
+    fistRise: 1.5,
     uiHidden: false,
   },
   jelly: {
@@ -125,6 +128,7 @@ export const PRESETS: Record<
     fistGut: 1,
     fistLever: 1,
     fistMaxDepth: 1,
+    fistRise: 1.5,
     uiHidden: false,
   },
   athletic: {
@@ -155,6 +159,7 @@ export const PRESETS: Record<
     fistGut: 1,
     fistLever: 1,
     fistMaxDepth: 1,
+    fistRise: 1.5,
     uiHidden: false,
   },
 };
@@ -229,6 +234,7 @@ export const useStudio = create<StudioState>((set) => ({
       fistGut: s.fistGut,
       fistLever: s.fistLever,
       fistMaxDepth: s.fistMaxDepth,
+      fistRise: s.fistRise,
       showLattice: s.showLattice,
       showWeights: s.showWeights,
       uiHidden: s.uiHidden,
