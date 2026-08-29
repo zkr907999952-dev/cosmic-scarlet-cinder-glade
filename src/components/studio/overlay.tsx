@@ -205,22 +205,24 @@ export function Overlay() {
           <p className="font-display text-3xl leading-none tracking-display text-fg sm:text-4xl">VELA</p>
           <p className="mt-1 text-xs tracking-[0.18em] text-muted uppercase">腰腹柔体模拟</p>
         </div>
-        <div className="pointer-events-auto hidden items-center gap-1 sm:flex">
-          {(Object.keys(PRESETS) as PresetId[]).map((id) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => applyPreset(id)}
-              className={cn(
-                "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-fast ease-smooth-out",
-                preset === id
-                  ? "border-accent bg-accent text-accent-fg"
-                  : "border-border bg-surface/80 text-muted hover:text-fg",
-              )}
-            >
-              {PRESETS[id].label}
-            </button>
-          ))}
+        <div className="pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => {
+              const on = abdomenXray > 0.05;
+              setParam("abdomenXray", on ? 0 : 0.38);
+              if (!on) setParam("showOrgans", true);
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors duration-fast ease-smooth-out",
+              abdomenXray > 0.05
+                ? "border-accent bg-accent text-accent-fg"
+                : "border-border bg-surface/80 text-muted hover:text-fg",
+            )}
+          >
+            <Scan className="size-3.5" />
+            透视
+          </button>
         </div>
       </header>
 

@@ -563,7 +563,7 @@ export class SoftSkeleton {
     const rg = THREE.MathUtils.clamp(range, 0.08, 1);
     const sig = 0.04 + rg * 0.1;
     const sig2 = sig * sig;
-    const depth = 0.032 + f * 0.078;
+    const depth = 0.018 + f * 0.042;
     this.dents.push({ x, y, z, t: 0, force: f, range: rg });
     if (this.dents.length > 3) this.dents.shift();
     for (const bind of this.bindings) {
@@ -809,7 +809,7 @@ export class SoftSkeleton {
             const crater = Math.exp(-r2 / (sig * sig));
             const r = Math.sqrt(r2);
             const rim = Math.exp(-((r - sig * 1.12) / (sig * 0.42)) * ((r - sig * 1.12) / (sig * 0.42)));
-            const depth = (0.03 + dent.force * 0.08) * gain;
+            const depth = (0.016 + dent.force * 0.042) * gain;
             const wall = THREE.MathUtils.clamp(s * 2.6 + 0.45, 0.45, 1) * front;
             const sink = crater * depth * wall;
             tz -= sink;

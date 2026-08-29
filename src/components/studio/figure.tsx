@@ -1026,6 +1026,7 @@ function FittedFigure({
     bone: number;
   } | null>(null);
   const energyTick = useRef(0);
+  const gutExc = useRef(0);
   const lastAz = useRef<number | null>(null);
   const lastPol = useRef<number | null>(null);
   const { camera, gl, raycaster, pointer } = useThree();
@@ -1297,6 +1298,7 @@ function FittedFigure({
       setup.skeleton.reset();
       setup.gutHealth.reset();
       setup.fist.reset();
+      gutExc.current = 0;
     }
     if (s.strikeNonce !== lastStrike.current) {
       lastStrike.current = s.strikeNonce;
@@ -1307,6 +1309,7 @@ function FittedFigure({
       setup.skeleton.impulse(ox, oy, oz, s.strikeForce, s.strikeRange);
       setup.strike.fire(ox, oy, oz, s.strikeForce, s.strikeRange);
       setup.gutHealth.hit(ox, oy, oz, s.strikeForce, s.strikeRange);
+      gutExc.current = Math.min(0.35, gutExc.current + 0.08 + s.strikeForce * 0.14);
     }
     if (s.expression !== exprRef.current) {
       exprRef.current = s.expression;
@@ -1395,8 +1398,10 @@ function FittedFigure({
       fistLever: s.fistLever,
       fistRise: s.fistRise,
     });
+    gutExc.current += (0 - gutExc.current) * (1 - Math.exp(-0.42 * dt));
     if (s.showOrgans && s.abdomenXray > 0.08) {
-      setup.peristalsis.apply(state.clock.elapsedTime, s.gutAmp, s.gutSpeed);
+      const g = gutExc.current;
+      setup.peristalsis.apply(state.clock.elapsedTime, s.gutAmp * (1 + g * 0.38), s.gutSpeed * (1 + g * 0.3));
     }
     inflateGuts(setup.gutRoot, setup.navel, s.bellyInflate);
     setup.strike.step(dt);
